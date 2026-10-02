@@ -1,0 +1,52 @@
+[package]
+name = "types"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish.workspace = true
+
+[features]
+# assembly SHA3 (XKCP via keccak-asm) for transaction hashing, ~2-4x the
+# pure-Rust sha3 crate this falls back to. Off by default: it is a sequencer
+# throughput concern, and building it needs `perl` (see the target table below),
+# which no SDK consumer should have to install to hash a transaction. The engine
+# opts in; both paths produce identical bytes, pinned by a differential test.
+asm-keccak = ["dep:keccak-asm"]
+crypto_support = ["crypto"]
+test-helpers = []
+# opt in to the sonic-rs json backend; off by default, so the facade stays on
+# serde_json. enabling it anywhere in a dependency graph flips every consumer of
+# the shared facade at once (cargo feature unification).
+sonic = ["json/sonic"]
+
+[dependencies]
+alloy-primitives = { workspace = true, features = ["serde"] }
+base64-simd = { workspace = true }
+crypto = { workspace = true, optional = true }
+rust_decimal = { workspace = true }
+json = { workspace = true }
+# `rc` is required by the Arc<str> hot-path id fields, not optional polish —
+# declared here rather than left to the workspace feature list so `types` still
+# compiles when it is the only package selected (e.g. in the standalone sdk).
+serde = { workspace = true, features = ["rc"] }
+sha3 = { workspace = true }
+thiserror = { workspace = true }
+
+# keccak-asm generates its assembly at build time with the cryptogams perlasm
+# scripts, so building it needs `perl` on PATH (plus `patch` on the avx512vl
+# path). a stock Windows rustup + MSVC toolchain has neither, which broke every
+# standalone-sdk consumer building on Windows. excluding the dependency by target
+# keeps the asm hasher on for the platforms that can build it and silently falls
+# back to the pure-Rust sha3 crate on Windows — identical bytes either way.
+[target.'cfg(not(windows))'.dependencies]
+keccak-asm = { workspace = true, optional = true }
+
+[dev-dependencies]
+# differential tests pin base64-simd's acceptance behavior against the
+# previous scalar decoder
+base64 = { workspace = true }
+chrono = { workspace = true }
+rust_decimal_macros = { workspace = true }
+
+[lints]
+workspace = true

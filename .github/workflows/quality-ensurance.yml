@@ -1,0 +1,34 @@
+name: Check code quality
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check-code-quality:
+    name: Check code quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - uses: olix0r/cargo-action-fmt/setup@v2
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy
+
+      - run: cargo clippy --all-features --all-targets -- -D warnings
+
+      - run: cargo doc --no-deps --message-format=json | cargo-action-fmt
+

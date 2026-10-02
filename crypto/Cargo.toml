@@ -1,0 +1,19 @@
+[package]
+name = "crypto"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+iota-keys = { workspace = true }
+iota-sdk-crypto = { workspace = true }
+iota-sdk-types = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+base64 = { workspace = true }
+
+[lints]
+workspace = true

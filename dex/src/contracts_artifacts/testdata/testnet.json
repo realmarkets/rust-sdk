@@ -1,0 +1,845 @@
+{
+  "data": {
+    "coins": {
+      "stable": {
+        "package_id": "0xf154bc71dddd845de9f892f4b9ddf0c850df92d6d53b0bbac1156a15a53fa3b0",
+        "type": "0xf154bc71dddd845de9f892f4b9ddf0c850df92d6d53b0bbac1156a15a53fa3b0::stable::STABLE"
+      }
+    },
+    "deployer": {
+      "address": "0x6e74db17cc6641168f5db0603ea39d9e5eb88ffd02536d6c8033f189537303e7"
+    },
+    "governance_state": {
+      "forge": {
+        "registered_packages": {
+          "0x0186b06b6368fe086997ac0ec28b3e6eafb8ff978ea180bd8fb52003783dba80": {
+            "name": "price_feed",
+            "realized_at_digest": "nUwLeJ9Usiii23bfMsGBvaDpfCjKDQi9wz2zGvHkL9h"
+          },
+          "0x05fff0ef6fb13c589efa8af0304a044e55b1e702518f9354c3404a9c4c3a46c0": {
+            "name": "positions",
+            "realized_at_digest": "CPEnnS6FJTFxbD28NtTZGFC6aF9AJeTDW5STgcNJPZne"
+          },
+          "0x0ea68d80ff2bd2c9bca62b94ec77823059fd27786e1466fcde821cce5f4f1d57": {
+            "name": "faucet",
+            "realized_at_digest": "FpbeTnNVgUYsL3avpgSpUux8RoXYjMJVN8rpSNZpcyZq"
+          },
+          "0x162958df64a6060eb45d763c0a69d0cf25e84a860de02df9ec56ce29da14202e": {
+            "name": "metadata",
+            "realized_at_digest": "6bVDEuDCTLrQQymFEft56jNGgvwF75dW1JGbP7CjgMwq"
+          },
+          "0x16bb73ad388dfe7ef8e6e6f11aa745d2eb842737bf44ae987b4ed6b9439897fc": {
+            "name": "versioning",
+            "realized_at_digest": "9iZmnibfssh3KkPe23MzufJjekzKRYQ7UTui47ieJh3r"
+          },
+          "0x25b9b66c4004dab9d7455e29db7ab771e05a9e6f23e2d672560495f2fbc045b6": {
+            "name": "fixed18",
+            "realized_at_digest": "A6oasmyHfyLLvwfQmQ7CZjGtByqQuvoVuMyHhjhG24at"
+          },
+          "0x34dceb9e8576635d3adb384120da92da3b5ad9d0fed26d5bd0472b9a01b228a7": {
+            "name": "pyth_lazer_src",
+            "realized_at_digest": "56pWEzJKSoDoBfTPatrRD5iF82NJWJ7ejRaRfQWt4Sz2"
+          },
+          "0x3b3dd1fb98b95262ec6dd76fe7ab1741c1d8c7ccac0e1aada7c2272a114aa015": {
+            "name": "bankruptcy",
+            "realized_at_digest": "8bwwFfwts65WDuXsNLKtrEfcM7f7wAxK4GmnR9b5iGD3"
+          },
+          "0x3beb4498146a7b9ad81ec017af41349f967178958599147690950f126b547fea": {
+            "name": "deposit_limit",
+            "realized_at_digest": "7JSYevBXvoqUonQVRz8D5Y9gS8aT9CW3b7dh3VXRY5Yt"
+          },
+          "0x610d671d039ebc89c10ac81d239b5cb49f17d66723819532d74f51bfb88e2a76": {
+            "name": "account_registry",
+            "realized_at_digest": "D1mjnEzPuCkicV14CdrZQ9nWHtrmAppWEsj8GHBW3SXQ"
+          },
+          "0x6355293bbc3c7e2b22062a64f472efcba5ce27c93d9d8acfc06f0fadeda6a0db": {
+            "name": "tuple",
+            "realized_at_digest": "A5z1vJgXTdMf8bb2gajjdVBJXDu5zJTL1B2sGhAfYoJ1"
+          },
+          "0x7a44e6a7b2d99f8e9dcd2343a4048bc4381b832bcc73f4b0ff8388b8c189e503": {
+            "name": "multisig",
+            "realized_at_digest": "75m5zjPKaAJDvJfyPdMgCEVADRQvohmbWAzweAsQpUAZ"
+          },
+          "0x8eaf35684064230f74d0785392b9799d0839ed56c33aac4ba105393637e59073": {
+            "name": "soul_bound",
+            "realized_at_digest": "6kt8Q6S8ECsQXfrJeGfZwyPHp68L1qopkfxRzecFL2J3"
+          },
+          "0x9a00955e11bad961d4e1cf38501852e987116c966a69528d806ab6e61e96f773": {
+            "name": "ring_buffer",
+            "realized_at_digest": "3NK7azsMRUr3YPuZRUBrqFtze17kd8R1d3jscmtJyD8D"
+          },
+          "0xc49ddf57e26ccc1ca24f2cfd03a049fa464324b4c7d2e044d2add694ac0fb180": {
+            "name": "real_markets",
+            "realized_at_digest": "9TQ7eskUXypgVtbS7Fqf52QmBcWvpHvVKg3BaTyUXYwL"
+          },
+          "0xc59ce447319ba5bd53a6c3a122ac2bad1e2c70bab163db8e8f06490de4e74537": {
+            "name": "address_registry",
+            "realized_at_digest": "DaGmS7VarVuMyYuVszX4efiPj62mFWkz9TTq7yfbtSCF"
+          },
+          "0xe662a86943ad4a56771e84ded26a1eea0ab960e8e81c9a51e3ec79b8edb7a6c3": {
+            "name": "real_forge",
+            "realized_at_digest": "3cGBHbcFHJ1kcnQsaj3HSkgiSiBDagBrE9Uwigw8EKbd"
+          },
+          "0xe9bbe07085a0cd25537094d17bbb0250c067f819148c32572f472ed5c038592d": {
+            "name": "funding",
+            "realized_at_digest": "HWNtKmeVWBCF6rHJNLTdbwAJg6aaquE4d5s6vc9p7eUs"
+          },
+          "0xf3ef2cca880e9bf7516ce499aadfb6db6c23d31c45355e1fd8c6afeed1fa6441": {
+            "name": "withdrawal_safeguards",
+            "realized_at_digest": "9zaiPG7MEUkYUy37a9pduvjHw39MvaRqU5grLdpYRLLj"
+          },
+          "0xf8fad889c62e2e84305174d27df13c741c8e688b9e3cbde1bd076c2b6dff3901": {
+            "name": "real_helm",
+            "realized_at_digest": "DLN9wopuLV7kpi1xBgeu4LFgnJwGai3CVAKGXWiMgftK"
+          }
+        }
+      },
+      "helm": {
+        "owned_objects": {
+          "0x0dca2ad1b22da97a714c83ff0f1b6eb750e9d3662c48f168d8e45964dfbd0c2e": {
+            "realized_at_digest": "5d2k6ZKV9WY7gYrJxXTktR9RAL5RhqthxvTDEqcQQz4D",
+            "subject_id": "0x1e98bbcb7330a2ea43c03f6068d22cdee67d25274860e060f71246340daaa78c"
+          },
+          "0x4a518a48f4662048f0ce6801728c71ed0645ae40e75a95e70166c1e813e652d8": {
+            "realized_at_digest": "12PacyUHnn3vdhjeHcSftX6GtEiaBNaM4Dvz92DcdEWm"
+          },
+          "0x51bc9b230d3bde9d0d90c6883eb7018f043449a61a80807bca548fdeff8ace4f": {
+            "realized_at_digest": "2L3Wwb7wGXpRRYpkJKhYRbdk9vrRz7TRVsTroHxpivvn",
+            "subject_id": "0x46b916bf7066ca537bfc5766b2bbaa64a8694c6d867607a52b11e30ae8ec299e"
+          },
+          "0x5b85374c202dbea989a29e5b228dda6abe919f33dce84b9088aa3d2061986d7f": {
+            "realized_at_digest": "8eidi4qoMS1RK7DWMMgF5NhhzY9FNKYjTgKgTVrUQmg",
+            "subject_id": "0xa22bd33886772b5cbf6a1aecbd8cb838c0fea92ae33c65c1c09c86ff3b63397f"
+          },
+          "0x6eb797188bd7308544751301c3063eee92db273876718a305a10dbd6e7fecb53": {
+            "realized_at_digest": "BuGB3dHRh1DCmk73shqiMNieLsMiUuXMCsP5yBbunCPr",
+            "subject_id": "0x1b168619db8a65f516457c9608d1e0730e22b55c6eda07684a84e2f387295fc8"
+          },
+          "0x8a9ac1077a33afb0492ab84656ff08ecc8697adbb945ced161438a6fa1c2ec3d": {
+            "realized_at_digest": "DLfKb5gcjABkD8PXreLpwTV6RzYijAMWUxqLnz7bzVSP",
+            "subject_id": "0x1e7a92d9c1c6cb79a49a87b50e36c4bbd2806cfb88e4919918dba1c3300b1202"
+          },
+          "0x8ae6ed47ce903f553779c629f0e07444904ea7b7b8f4107a0de45175ec82f37d": {
+            "realized_at_digest": "9XKuCvt183PFGqTeA18RBGaL4i4mRi2WzXUwEe6vvMD2",
+            "subject_id": "0xded4579ec6972f643175e42278e41286b4959bb14c136a0fa930bb03e03eb200"
+          },
+          "0xd3811b54d178e2e284a65b642d3b3b59b6714dbd7c8bd9e4f56273c3e52640d3": {
+            "realized_at_digest": "9G2NzjkHY1wfPSNSnawHPaQttGYjikq6r63gwpNHczsx",
+            "subject_id": "0x9042ddac7addabe5ec36d720e56893d1e1ddf370fb8494ee82281dd430d63e5f"
+          },
+          "0xe40124574e377c8cc6335f00d7f707452a615010b97ca928902e3ca5d5177e1d": {
+            "realized_at_digest": "GSS8yzYMXxuFsLvAbKE4t8Tp7pBBavedc2LPxmkPSHSr",
+            "subject_id": "0x17c37c2b8f982919622aed217439abffad50ba3d3f3c1753025f01658758e9c1"
+          }
+        }
+      },
+      "oracle": {
+        "authorized_sources": {
+          "0x1b3516b8531cf1271260c786cb4a7ce4ae9818711363b8307b42ecd26149c5ab": {
+            "realized_at_digest": "7oAymiVMoygDKtaFSKhF2r9qKDFUwX1XB92WsCUuKt8a"
+          },
+          "0x2861db15070e8f1af1a08e5a5ecee825b939c1b85baecf6fc745628ca95ac90a": {
+            "realized_at_digest": "Czcnpic2GH8sd7CHbKHsv4aUhFL9Up6vyafSjkqwsRNK"
+          },
+          "0x50cf2be41210b5be0f512ec54d02041a512f457a027b751cb0068b6f098d3ea5": {
+            "realized_at_digest": "4tqfk5g52gKyskdRS89tji8YrbcZEcKgvyu3SgoX656p"
+          },
+          "0x767651280522ae8b0b3f5b306e72c972cc59c8d615447590ece51da8d6ae1984": {
+            "realized_at_digest": "7ihT7BEWnyKku5ABPNu6buQ8VAsJDVVV6XgT3tHABzkf"
+          },
+          "0xa97e85612642f1bcc4d9310f153729882d095902d7a29963b9284c28c6dce7b3": {
+            "realized_at_digest": "5fQZPHqwb8tH6VB8v3hmiLuqKeXNKppjvi3nyXvaJ5SA"
+          },
+          "0xb9967424193dfbd1e5b2e07a46aa2c8719fc5b1152ec1438f8e5873c6e6a3810": {
+            "realized_at_digest": "CFFdsXSguCurt3QSZjZAcLeT1fNEpz1vxFbHZWU1DG8s"
+          },
+          "0xcc6df9a816b70f09dce65ce543997f353860634ffe2d6c3158a6035f84457717": {
+            "realized_at_digest": "GWGgrL9vJfiouHeWCAjdQNs9ZPbzgjy3xohKwm17FSYo"
+          },
+          "0xd2f143c944574af6ef8f72d6d038a93ad8345bdd730caf893d7b915b45420ea3": {
+            "realized_at_digest": "D1MCLVQwqHMTXYQ27vxWx1ZVJYyMjdqi6wE38YyzcEE2"
+          }
+        },
+        "registered_packages": {
+          "0x34dceb9e8576635d3adb384120da92da3b5ad9d0fed26d5bd0472b9a01b228a7": {
+            "realized_at_digest": "GKxUnYdwHrW9Z13LkXMzqm3Nq7itHr6MFoRFsaj2qMo4"
+          }
+        }
+      }
+    },
+    "latest_packages": {
+      "account_registry": "0x610d671d039ebc89c10ac81d239b5cb49f17d66723819532d74f51bfb88e2a76",
+      "address_registry": "0xc59ce447319ba5bd53a6c3a122ac2bad1e2c70bab163db8e8f06490de4e74537",
+      "bankruptcy": "0x3b3dd1fb98b95262ec6dd76fe7ab1741c1d8c7ccac0e1aada7c2272a114aa015",
+      "deposit_limit": "0x3beb4498146a7b9ad81ec017af41349f967178958599147690950f126b547fea",
+      "exchange": "0xc49ddf57e26ccc1ca24f2cfd03a049fa464324b4c7d2e044d2add694ac0fb180",
+      "faucet": "0x0ea68d80ff2bd2c9bca62b94ec77823059fd27786e1466fcde821cce5f4f1d57",
+      "fixed18": "0x25b9b66c4004dab9d7455e29db7ab771e05a9e6f23e2d672560495f2fbc045b6",
+      "funding": "0xe9bbe07085a0cd25537094d17bbb0250c067f819148c32572f472ed5c038592d",
+      "metadata": "0x162958df64a6060eb45d763c0a69d0cf25e84a860de02df9ec56ce29da14202e",
+      "mock_source": "0xac58c085d870c8b5f490428ab07ab56fbcb5869372e30ddd1c0ea883676f5e96",
+      "multisig": "0x7a44e6a7b2d99f8e9dcd2343a4048bc4381b832bcc73f4b0ff8388b8c189e503",
+      "positions": "0x05fff0ef6fb13c589efa8af0304a044e55b1e702518f9354c3404a9c4c3a46c0",
+      "price_feed": "0x0186b06b6368fe086997ac0ec28b3e6eafb8ff978ea180bd8fb52003783dba80",
+      "pyth": "0x23994dd119480ea614f7623520337058dca913cb1bb6e5d8d51c7b067d3ca3bb",
+      "pyth_lazer": "0x0737771e2ecf605331e299bfeae6fec4aa8a038db0bf600f7d34f38e471c36f2",
+      "pyth_lazer_src": "0x34dceb9e8576635d3adb384120da92da3b5ad9d0fed26d5bd0472b9a01b228a7",
+      "pyth_lazer_wormhole": "0xa096f57057d12f61aecabf025090adf443610485452bbdb1bb62ddf3023dcf33",
+      "pyth_source": "0xac73874db21a5e93ff4163061136ed4b009b3b2fc787d77df82b4e1fd7afc3fa",
+      "real_forge": "0xe662a86943ad4a56771e84ded26a1eea0ab960e8e81c9a51e3ec79b8edb7a6c3",
+      "real_helm": "0xf8fad889c62e2e84305174d27df13c741c8e688b9e3cbde1bd076c2b6dff3901",
+      "ring_buffer": "0x9a00955e11bad961d4e1cf38501852e987116c966a69528d806ab6e61e96f773",
+      "soul_bound": "0x8eaf35684064230f74d0785392b9799d0839ed56c33aac4ba105393637e59073",
+      "stable": "0xf154bc71dddd845de9f892f4b9ddf0c850df92d6d53b0bbac1156a15a53fa3b0",
+      "tuple": "0x6355293bbc3c7e2b22062a64f472efcba5ce27c93d9d8acfc06f0fadeda6a0db",
+      "versioning": "0x16bb73ad388dfe7ef8e6e6f11aa745d2eb842737bf44ae987b4ed6b9439897fc",
+      "withdrawal_safeguards": "0xf3ef2cca880e9bf7516ce499aadfb6db6c23d31c45355e1fd8c6afeed1fa6441",
+      "wormhole": "0xfca58c557f09cddb7930588c4e2a4edbe3cdded1ac1ed2270aa2dfa8d2b9ae0d"
+    },
+    "markets": [
+      {
+        "id": "0x51e45da81aaffae5db3640e45afbf1b2974a35276be17f33785696c59ba02f98",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:00:51.70540343Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "6000",
+          "imr": "0.025",
+          "insurance_cooldown": "24h",
+          "lot_size": "0.0001",
+          "mark_source": "pyth_pro",
+          "mmr": "0.005",
+          "open_interest_limit": "100",
+          "percentage_of_volume": "5.5",
+          "price_decimals": 1,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 4,
+          "tick_size": "0.1",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0x8a9ac1077a33afb0492ab84656ff08ecc8697adbb945ced161438a6fa1c2ec3d",
+          "funding_crank_cap": "0x2404db430fe04b1fc20daaef872ff5abc528eedc03cd873309c72ce27eb820bb",
+          "funding_estimator": "0x1e7a92d9c1c6cb79a49a87b50e36c4bbd2806cfb88e4919918dba1c3300b1202",
+          "mark_price_source": "0x1b3516b8531cf1271260c786cb4a7ce4ae9818711363b8307b42ecd26149c5ab",
+          "market": "0x0d1c3c29ec43316be1b3973750e7c70029e15e7158f08df6596c929e05a70af8",
+          "metadata": "0x1b1c9134e6757aa5a3d9575faa4af329e93809a1e891849de4702edf79351b19"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "BTC"
+        },
+        "symbol": "BTC-USDT"
+      },
+      {
+        "id": "0x8a361002605ed1ec71aca5b6821971fd40833230c0e5732ab9ea4dc8a094f980",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:01:13.526539179Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "4000",
+          "imr": "0.04",
+          "insurance_cooldown": "24h",
+          "lot_size": "0.001",
+          "mark_source": "pyth_pro",
+          "mmr": "0.008",
+          "open_interest_limit": "3000",
+          "percentage_of_volume": "3.5",
+          "price_decimals": 2,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 3,
+          "tick_size": "0.01",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0xe40124574e377c8cc6335f00d7f707452a615010b97ca928902e3ca5d5177e1d",
+          "funding_crank_cap": "0x253f9e2e6194ecd572e10062fcbb1ba2e976a953a8444c26f272d22b9cc088b4",
+          "funding_estimator": "0x17c37c2b8f982919622aed217439abffad50ba3d3f3c1753025f01658758e9c1",
+          "mark_price_source": "0xcc6df9a816b70f09dce65ce543997f353860634ffe2d6c3158a6035f84457717",
+          "market": "0x5b04f02c4f690717d11b10bac8465b6f9a9663b41180168b61e236b0ce669db0",
+          "metadata": "0xbaf127f821eadd507bbaa0c20b9f7602d61942f21a4090a349bb996166740d3d"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "ETH"
+        },
+        "symbol": "ETH-USDT"
+      },
+      {
+        "id": "0x7632902479028155d47c543ef04db03962971989173ffc1be52f2e072b4191ba",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:01:35.423408383Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "3000",
+          "imr": "0.05",
+          "insurance_cooldown": "24h",
+          "lot_size": "0.01",
+          "mark_source": "pyth_pro",
+          "mmr": "0.01",
+          "open_interest_limit": "60000",
+          "percentage_of_volume": "2.5",
+          "price_decimals": 3,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 2,
+          "tick_size": "0.001",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0x51bc9b230d3bde9d0d90c6883eb7018f043449a61a80807bca548fdeff8ace4f",
+          "funding_crank_cap": "0xddba0c5585fbbe7b04e68741130322604c63bfb80729439e3b1655fa26c1f9de",
+          "funding_estimator": "0x46b916bf7066ca537bfc5766b2bbaa64a8694c6d867607a52b11e30ae8ec299e",
+          "mark_price_source": "0xa97e85612642f1bcc4d9310f153729882d095902d7a29963b9284c28c6dce7b3",
+          "market": "0x6f5e8b4592e6dee0e385ad68a3f7ec4c44e3cd70d3059c1061555fc19414da45",
+          "metadata": "0x59946e12117d70d51dbdd7d3f72944891cf1a8b36d1c3d4a5a75e9578dc37f20"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "SOL"
+        },
+        "symbol": "SOL-USDT"
+      },
+      {
+        "id": "0x2d104bfe781d0c8d8b550da6e87118df582280937d8c8441e2ed45cc21f67e4f",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:01:58.667705213Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "3000",
+          "imr": "0.05",
+          "insurance_cooldown": "24h",
+          "lot_size": "1",
+          "mark_source": "pyth_pro",
+          "mmr": "0.01",
+          "open_interest_limit": "3000000",
+          "percentage_of_volume": "0.5",
+          "price_decimals": 4,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 0,
+          "tick_size": "0.0001",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0x6eb797188bd7308544751301c3063eee92db273876718a305a10dbd6e7fecb53",
+          "funding_crank_cap": "0x9fe2376447b30090e21de14f077537943c11ac75e270d7e789ff041f81f1100a",
+          "funding_estimator": "0x1b168619db8a65f516457c9608d1e0730e22b55c6eda07684a84e2f387295fc8",
+          "mark_price_source": "0x767651280522ae8b0b3f5b306e72c972cc59c8d615447590ece51da8d6ae1984",
+          "market": "0x681c3fdeec16f9e68cc2c126faa3c16985be4e1c2870c1c4d9b23a38909b46d7",
+          "metadata": "0xc32b3883db8942a7cf423913332dbbb0786fe39ee849147215e65361783b23f0"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "XRP"
+        },
+        "symbol": "XRP-USDT"
+      },
+      {
+        "id": "0x5114c74ae4426af59f8591d28fafca37913441fbad2482c2cc206e36c6b4f1d6",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:02:23.471671847Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "3000",
+          "imr": "0.1",
+          "insurance_cooldown": "24h",
+          "lot_size": "10",
+          "mark_source": "pyth_pro",
+          "mmr": "0.02",
+          "open_interest_limit": "40000000",
+          "percentage_of_volume": "0.5",
+          "price_decimals": 5,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 0,
+          "tick_size": "0.00001",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0x5b85374c202dbea989a29e5b228dda6abe919f33dce84b9088aa3d2061986d7f",
+          "funding_crank_cap": "0xd861d5a729273407e4b7be4e9ab650c8772d17a99a318e03f2bd980d58de52fa",
+          "funding_estimator": "0xa22bd33886772b5cbf6a1aecbd8cb838c0fea92ae33c65c1c09c86ff3b63397f",
+          "mark_price_source": "0xd2f143c944574af6ef8f72d6d038a93ad8345bdd730caf893d7b915b45420ea3",
+          "market": "0xf361824baf2a9931384d11a5289afba85c36281636b1c672ebce87e012a98add",
+          "metadata": "0x68a907466b13e5830fd59289e70dfdde84ac8192e12d7890cfc6f22e6a70a1e8"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "DOGE"
+        },
+        "symbol": "DOGE-USDT"
+      },
+      {
+        "id": "0x499d55adda955468d5628df3d005ec7ffad778d45fd86f299fa7cd30fab53062",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:02:45.734043383Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "3000",
+          "imr": "0.1",
+          "insurance_cooldown": "24h",
+          "lot_size": "0.01",
+          "mark_source": "pyth_pro",
+          "mmr": "0.02",
+          "open_interest_limit": "7500",
+          "percentage_of_volume": "0.5",
+          "price_decimals": 2,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 2,
+          "tick_size": "0.01",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0xd3811b54d178e2e284a65b642d3b3b59b6714dbd7c8bd9e4f56273c3e52640d3",
+          "funding_crank_cap": "0xc37b9cb8e245cf02ff65f0fdfdf50c1f918c8a73e4c309c7a7972183600229c5",
+          "funding_estimator": "0x9042ddac7addabe5ec36d720e56893d1e1ddf370fb8494ee82281dd430d63e5f",
+          "mark_price_source": "0x2861db15070e8f1af1a08e5a5ecee825b939c1b85baecf6fc745628ca95ac90a",
+          "market": "0xcdb0879338a3db62a9eedd3be91d2ae04a0145dbc5c1a59dd2d5f3affad91ea8",
+          "metadata": "0x0ac1f481d177437348d0336ba5b0c0c8fd90a30311b865adf8dc5c3c256d8984"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "ZEC"
+        },
+        "symbol": "ZEC-USDT"
+      },
+      {
+        "id": "0xd48eabc7ec2262323d777e02be2294a48f3e60b542944bc9197684c8b0e7b1f8",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:03:08.791876784Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "3000",
+          "imr": "0.1",
+          "insurance_cooldown": "24h",
+          "lot_size": "0.01",
+          "mark_source": "pyth_pro",
+          "mmr": "0.02",
+          "open_interest_limit": "6000",
+          "percentage_of_volume": "8.5",
+          "price_decimals": 2,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 2,
+          "tick_size": "0.01",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0x0dca2ad1b22da97a714c83ff0f1b6eb750e9d3662c48f168d8e45964dfbd0c2e",
+          "funding_crank_cap": "0x74f9a3e0c984af76c50c7132584830c8d1383aebc6adda6d386a1daa1a097f9b",
+          "funding_estimator": "0x1e98bbcb7330a2ea43c03f6068d22cdee67d25274860e060f71246340daaa78c",
+          "mark_price_source": "0xb9967424193dfbd1e5b2e07a46aa2c8719fc5b1152ec1438f8e5873c6e6a3810",
+          "market": "0xc6466bd5dce6fe4547eeed7c768274d45615deef0df1cbfa6999d0501808bdd2",
+          "metadata": "0x48cfc14f880bb15b6f904583c126156632846528cba91cb07d17982d444fa2bc"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "BNB"
+        },
+        "symbol": "BNB-USDT"
+      },
+      {
+        "id": "0x7f35d2da0963c69025d55beac642343914e4d4fa117be20d72e1181c7a434234",
+        "metadata": {
+          "adl_bucket_count": 20,
+          "backstop_liquidation_price_buffer": "0.67",
+          "created_at": "2026-09-22T17:03:32.549627338Z",
+          "designated_liquidators": [
+            "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+          ],
+          "designated_market_makers": [
+            "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+          ],
+          "funding_frequency": "1h",
+          "impact_margin_notional": "3000",
+          "imr": "0.1",
+          "insurance_cooldown": "24h",
+          "lot_size": "0.01",
+          "mark_source": "pyth_pro",
+          "mmr": "0.02",
+          "open_interest_limit": "60000",
+          "percentage_of_volume": "2.5",
+          "price_decimals": 3,
+          "price_max_age": "15s",
+          "pyth_price_feed_id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "size_decimals": 2,
+          "tick_size": "0.001",
+          "version": "v2"
+        },
+        "objects": {
+          "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+          "funding_admin_cap": "0x8ae6ed47ce903f553779c629f0e07444904ea7b7b8f4107a0de45175ec82f37d",
+          "funding_crank_cap": "0xe5d9b5d32c79f31a631ca8558bc87fe8c065f9dade45f4b12ae66dc27eb91a90",
+          "funding_estimator": "0xded4579ec6972f643175e42278e41286b4959bb14c136a0fa930bb03e03eb200",
+          "mark_price_source": "0x50cf2be41210b5be0f512ec54d02041a512f457a027b751cb0068b6f098d3ea5",
+          "market": "0xe0dc733f3ac76c92dca5698e184b81cd20b0356c6dc4762aa7486ace0321ea1b",
+          "metadata": "0x366d2a4fb6da1c24e13dc57ef4e39eaeec714c234e4e6492ca577681cd555cb4"
+        },
+        "product_metadata": {
+          "quote_unit": "USD",
+          "settlement_asset": "USDT",
+          "underlying": "HYPE"
+        },
+        "symbol": "HYPE-USDT"
+      }
+    ],
+    "metadata": {
+      "accounts": {
+        "funding": [],
+        "insurance": [
+          "0x078db96adc178c0064c9f726a23f107a338986c471bb20be9749fd24edb91d2a"
+        ],
+        "liquidator": [
+          "0x33972e1a0965401270abc9928caa937da06a70fce6bb5c2e2de93f98631c6b57"
+        ],
+        "matching": [],
+        "price_printer": [
+          "0xd4d8da07fc8b7964e86536b03283c2c60ba89724146f8bc1fb16ef177254eace"
+        ],
+        "price_pusher": [],
+        "settlement": [],
+        "simple_mm": [
+          "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200"
+        ],
+        "testing": [],
+        "unwinder": [
+          "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90"
+        ],
+        "withdrawal": []
+      },
+      "chain_id": "2304aa97",
+      "checkpoint_sequence": 268092988,
+      "date": "2026-09-22T16:58:04Z",
+      "deposit_exempt_accounts": [
+        "0x078db96adc178c0064c9f726a23f107a338986c471bb20be9749fd24edb91d2a",
+        "0x33972e1a0965401270abc9928caa937da06a70fce6bb5c2e2de93f98631c6b57",
+        "0x3918619409e57a659fc1d4d7efdda64e55d1188acb066b746973d09fe7b51a90",
+        "0xa831c2948c567e92ff96c5839a41e6ba6c85e956f5905921287e41bf57f36200",
+        "0xd4d8da07fc8b7964e86536b03283c2c60ba89724146f8bc1fb16ef177254eace"
+      ],
+      "faucet_mint_amount": 1000,
+      "git": {
+        "branch": "HEAD",
+        "commit": "3ea33491153798bcb599f66c0b4ad644d5f1b099"
+      },
+      "grpc_network": "https://grpc.testnet.iota.cafe",
+      "rate_limit_exempt_accounts": [
+        "0x05ed8d69930b7572131ef730fa60f4cbae2289df79802a72dee7cd37a536c330",
+        "0x4bdbf53da0b70e6cdd80ac8e452a9f407f3b1cba5c64bb52b0abf0184173a8a7",
+        "0x5537a00fd057f9493afc870c6a0998cd91c9bbff395d216023bfe2ce1f3143a6",
+        "0xa0d9ed1ea3c740e3d5f5a42e2b826591db473bb071043425ded42e6457af96f9",
+        "0xc8d7f3ae48f5dd798ff4377a7328e586661dc01780db2e968de4268cae494bc4"
+      ],
+      "rpc_network": "https://api.testnet.iota.cafe",
+      "schedules": {
+        "1790097543000": "post-only",
+        "1790097849000": "reduce-only",
+        "1790098154000": "continuous"
+      },
+      "settlement_backlog_age_ms": 6000000,
+      "settlement_event_lag_ms": 600000,
+      "vault_limits_by_vault": {
+        "0x96b049f366b33ac090a6731f5c5068c1275b55a2a77ceff84f830b87af524849": {
+          "collateral_type": "0xf154bc71dddd845de9f892f4b9ddf0c850df92d6d53b0bbac1156a15a53fa3b0::stable::STABLE",
+          "max_account_balance": 3000000000,
+          "max_tvl": 3000000000000000000,
+          "min_deposit_amount": 10000000,
+          "min_withdrawal_amount": 10000000
+        }
+      },
+      "vault_withdrawal_safeguards_by_vault": {
+        "0x96b049f366b33ac090a6731f5c5068c1275b55a2a77ceff84f830b87af524849": {
+          "account_cumulative_withdrawal_limit": 5000,
+          "account_cumulative_withdrawal_limit_breach_delay_ms": 900000,
+          "account_cumulative_withdrawal_limit_window_ms": 900000,
+          "vault_cumulative_withdrawal_limit": 50000,
+          "vault_cumulative_withdrawal_limit_breach_delay_ms": 900000,
+          "vault_cumulative_withdrawal_limit_window_ms": 900000
+        }
+      },
+      "wallets": {
+        "funding": "0xa71f8873cf5a5f1b0591ee01cc2e9094b1806c5c393a65b4b9dc4f7a1331764f",
+        "insurance": "0x674daacb8ad31dce06f8484c230c963859cfa977506685c2ed3902db52648800",
+        "liquidator": "0xf16e41beaadacadb883e79cae5ffd15d6fc3b9c47ae73a2142a7ab683e0185ad",
+        "matching": "0xf9e4f7f66304ca332d20636b5358b0b9297afbc7428bc107fc5dbc64fb204125",
+        "price_printer": "0xa625d9a33b441fa56232d30db6c2e30a37186f7778e4327725f8bf361d6c3f86",
+        "price_pusher": "0xe3071870e0bf9f5a5e9c1985775b61da9c83ccbf1423d7293d8f5de16858d7f5",
+        "settlement": "0xa34d39914375832320c5c5af23bcc505144f5924524ebfa2d95e8d145e22c6d7",
+        "simple_mm": "0x83babdba7ac2546685e80a618f3323b8d283b68108a69f77b4b7699d65144936",
+        "testing": "0x92321c9423f4f2efd16b148488ed83f2c026f3ca482656d9cfb97989f7357703",
+        "unwinder": "0x1a4673567c649f7e176cb0b73524985f6d6feff8f703900bfa990f90efd1873c",
+        "withdrawal": "0x4ac6415d2ca4f75dac45328fed4889c1008ae98ad5544c41dec36b943a5aa65f"
+      }
+    },
+    "multisig_settings": {
+      "governance": {
+        "admin_cap": "0xf89414b42e7dfea3e0605849e4dac51ec3c29d688540ed1aabc63cd63e443c84",
+        "enabled_at_utc": "2026-09-22T16:59:11.208008287Z",
+        "helm_package_name": "real-helm",
+        "members": [
+          {
+            "address": "0x2ade910d9b7a5afa4aaaab80cf90016bd3e1e7d126b5995bf232e07d1fb00081",
+            "weight": 1
+          },
+          {
+            "address": "0xbcbd1491c56707b4abf169f58d65ec2ab2d5f0d1a9e90e7cc7a57dc056571fcc",
+            "weight": 1
+          },
+          {
+            "address": "0x6e74db17cc6641168f5db0603ea39d9e5eb88ffd02536d6c8033f189537303e7",
+            "weight": 1
+          }
+        ],
+        "multisig_package_name": "multisig",
+        "real_helm": "0xf8fad889c62e2e84305174d27df13c741c8e688b9e3cbde1bd076c2b6dff3901",
+        "threshold": 1
+      },
+      "sequencer": {
+        "members": [
+          {
+            "address": "0x2ade910d9b7a5afa4aaaab80cf90016bd3e1e7d126b5995bf232e07d1fb00081",
+            "weight": 1
+          },
+          {
+            "address": "0xbcbd1491c56707b4abf169f58d65ec2ab2d5f0d1a9e90e7cc7a57dc056571fcc",
+            "weight": 1
+          },
+          {
+            "address": "0x6e74db17cc6641168f5db0603ea39d9e5eb88ffd02536d6c8033f189537303e7",
+            "weight": 1
+          }
+        ],
+        "threshold": 1
+      }
+    },
+    "objects": {
+      "account_registry": "0xbdf821a0714b2ce2f15747296d3559d89e7160527b0ff291a03f78e84691b812",
+      "address_registry": "0x0e26431abed99766cf1ba7ccce559ac3dbbd9dd9984c84b8efe9ac177713ea27",
+      "address_registry_cap": "0x0f6d4b7da364dcd6cd4163df2b29a859f299c8be5c6d145df72de217cca2ec5f",
+      "admin_cap": "0xf89414b42e7dfea3e0605849e4dac51ec3c29d688540ed1aabc63cd63e443c84",
+      "exchange": "0x741355519561b63e27535980e3c02fcf08683f6e48e4c4d871ddecf175dc8fc3",
+      "exchange_metadata": "0x0702d43d921190b307bb4314d38d77fe65e8863b79695d3f383a1ad27ebd2b6c",
+      "faucet": "0xdb2cd0795634b8da9cf8ac2054202897d9c781bb7b0ae45dde88ae52074190c0",
+      "faucet_cap": "0x341e9c2349827227ae96dc02b8510485752330b8393e089bf1c48a17812b5d55",
+      "fee_config": "0x886824730ba4d4cd1de07dad8710cdfe9f56aec5ca2e8792ca9dd01860b5c6d8",
+      "insurance_fund_config": "0xa26c43684dc5e76f09d8966322ec3a1dd52ead9395dd88f44ac66625366ee735",
+      "mock_source_publisher": "0x5454d27cfcc37fe6799fccfd5bb602c9576407107ce61a1356213f24b8502133",
+      "mock_source_upgrade_cap": "0x7579f9f776ba08abf21a9c4d82287d09ab5d12f7c6f52cdc24f0f5d742033393",
+      "price_feed_oracle_cap": "0x4a518a48f4662048f0ce6801728c71ed0645ae40e75a95e70166c1e813e652d8",
+      "pyth_lazer_params_cap": "0x015e423922afb9a2dcf8d3be78f81195fdd1efb705f339b66cba64ec19cd02a6",
+      "pyth_lazer_state": "0xf1d6ae91b61ae8aebafe81c016c87ad2405fa7bf0cc0378b8b5f84040a927792",
+      "real_forge": "0x1490e0880653542eb17e26ece5c08e005f1b7d1bc6f3a5d7d55001aa0b978ef7",
+      "real_helm": "0x1ceaf6da2bac2ffad5b9ac584b47e8a823acce7f2a2bac17186632395fc1b46b",
+      "stable_admin_cap": "0x83fd1590f680b3f21cfee69e982f9a591681b5d0f70d26c9929ed57a365c1f4d",
+      "stable_coin_metadata": "0x3018e7e874ccde4d538f7edc04874753ad42ec789dd9314de88121e1aa0cedf4",
+      "stable_treasury": "0xe291c8c6119eeac730582b748ef8b796444a6038ebbed1a66e2966da72a39a39",
+      "vault": "0x96b049f366b33ac090a6731f5c5068c1275b55a2a77ceff84f830b87af524849"
+    },
+    "package_history": {
+      "account_registry": [],
+      "address_registry": [],
+      "bankruptcy": [],
+      "deposit_limit": [],
+      "exchange": [],
+      "faucet": [],
+      "fixed18": [],
+      "funding": [],
+      "metadata": [],
+      "mock_source": [],
+      "multisig": [],
+      "positions": [],
+      "price_feed": [],
+      "pyth": [],
+      "pyth_lazer": [],
+      "pyth_lazer_src": [],
+      "pyth_lazer_wormhole": [],
+      "pyth_source": [],
+      "real_forge": [],
+      "real_helm": [],
+      "ring_buffer": [],
+      "soul_bound": [],
+      "stable": [],
+      "tuple": [],
+      "versioning": [],
+      "withdrawal_safeguards": [],
+      "wormhole": []
+    },
+    "package_history_imported_at": "2026-09-22T16:58:58.073766313Z",
+    "packages": {
+      "account_registry": "0x610d671d039ebc89c10ac81d239b5cb49f17d66723819532d74f51bfb88e2a76",
+      "address_registry": "0xc59ce447319ba5bd53a6c3a122ac2bad1e2c70bab163db8e8f06490de4e74537",
+      "bankruptcy": "0x3b3dd1fb98b95262ec6dd76fe7ab1741c1d8c7ccac0e1aada7c2272a114aa015",
+      "deposit_limit": "0x3beb4498146a7b9ad81ec017af41349f967178958599147690950f126b547fea",
+      "exchange": "0xc49ddf57e26ccc1ca24f2cfd03a049fa464324b4c7d2e044d2add694ac0fb180",
+      "faucet": "0x0ea68d80ff2bd2c9bca62b94ec77823059fd27786e1466fcde821cce5f4f1d57",
+      "fixed18": "0x25b9b66c4004dab9d7455e29db7ab771e05a9e6f23e2d672560495f2fbc045b6",
+      "funding": "0xe9bbe07085a0cd25537094d17bbb0250c067f819148c32572f472ed5c038592d",
+      "metadata": "0x162958df64a6060eb45d763c0a69d0cf25e84a860de02df9ec56ce29da14202e",
+      "mock_source": "0xac58c085d870c8b5f490428ab07ab56fbcb5869372e30ddd1c0ea883676f5e96",
+      "multisig": "0x7a44e6a7b2d99f8e9dcd2343a4048bc4381b832bcc73f4b0ff8388b8c189e503",
+      "positions": "0x05fff0ef6fb13c589efa8af0304a044e55b1e702518f9354c3404a9c4c3a46c0",
+      "price_feed": "0x0186b06b6368fe086997ac0ec28b3e6eafb8ff978ea180bd8fb52003783dba80",
+      "pyth": "0x23994dd119480ea614f7623520337058dca913cb1bb6e5d8d51c7b067d3ca3bb",
+      "pyth_lazer": "0x0737771e2ecf605331e299bfeae6fec4aa8a038db0bf600f7d34f38e471c36f2",
+      "pyth_lazer_src": "0x34dceb9e8576635d3adb384120da92da3b5ad9d0fed26d5bd0472b9a01b228a7",
+      "pyth_lazer_wormhole": "0xa096f57057d12f61aecabf025090adf443610485452bbdb1bb62ddf3023dcf33",
+      "pyth_source": "0xac73874db21a5e93ff4163061136ed4b009b3b2fc787d77df82b4e1fd7afc3fa",
+      "real_forge": "0xe662a86943ad4a56771e84ded26a1eea0ab960e8e81c9a51e3ec79b8edb7a6c3",
+      "real_helm": "0xf8fad889c62e2e84305174d27df13c741c8e688b9e3cbde1bd076c2b6dff3901",
+      "ring_buffer": "0x9a00955e11bad961d4e1cf38501852e987116c966a69528d806ab6e61e96f773",
+      "soul_bound": "0x8eaf35684064230f74d0785392b9799d0839ed56c33aac4ba105393637e59073",
+      "stable": "0xf154bc71dddd845de9f892f4b9ddf0c850df92d6d53b0bbac1156a15a53fa3b0",
+      "tuple": "0x6355293bbc3c7e2b22062a64f472efcba5ce27c93d9d8acfc06f0fadeda6a0db",
+      "versioning": "0x16bb73ad388dfe7ef8e6e6f11aa745d2eb842737bf44ae987b4ed6b9439897fc",
+      "withdrawal_safeguards": "0xf3ef2cca880e9bf7516ce499aadfb6db6c23d31c45355e1fd8c6afeed1fa6441",
+      "wormhole": "0xfca58c557f09cddb7930588c4e2a4edbe3cdded1ac1ed2270aa2dfa8d2b9ae0d"
+    },
+    "pyth_pro": {
+      "cross_rate": [
+        {
+          "created_at_digest": "9x9eMfSxpRbu2EGB2GDCMcRku5DbDU2gJsP5zjKMYxQE",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 1,
+          "source_id": "0x1b3516b8531cf1271260c786cb4a7ce4ae9818711363b8307b42ecd26149c5ab"
+        },
+        {
+          "created_at_digest": "8PTahVHfzUAafayomoKsKYkHBeVEQCRswn9tBjpiz1Fi",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 2,
+          "source_id": "0xcc6df9a816b70f09dce65ce543997f353860634ffe2d6c3158a6035f84457717"
+        },
+        {
+          "created_at_digest": "FZf4A6gUGkiJyGku4yLye6jkeJJC9Zevm6Tp8A9HciZB",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 6,
+          "source_id": "0xa97e85612642f1bcc4d9310f153729882d095902d7a29963b9284c28c6dce7b3"
+        },
+        {
+          "created_at_digest": "FowdgCrxDPLfaHcLgqWXXhsrjV3KP2UEcm92ksWw8zXL",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 14,
+          "source_id": "0x767651280522ae8b0b3f5b306e72c972cc59c8d615447590ece51da8d6ae1984"
+        },
+        {
+          "created_at_digest": "FPJaYst2nLztCNF5xcNyJNmmUbicGXC4P58brb7zhpDC",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 13,
+          "source_id": "0xd2f143c944574af6ef8f72d6d038a93ad8345bdd730caf893d7b915b45420ea3"
+        },
+        {
+          "created_at_digest": "HKcUqKSiJ7vLS5r13NbSHKTQW6H99VUd3KMYHdZWH3e6",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 66,
+          "source_id": "0x2861db15070e8f1af1a08e5a5ecee825b939c1b85baecf6fc745628ca95ac90a"
+        },
+        {
+          "created_at_digest": "Gyn2Kfe4qF5RyDPnQ3pT8tLQBdT277AMb1SN1r7gREpp",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 15,
+          "source_id": "0xb9967424193dfbd1e5b2e07a46aa2c8719fc5b1152ec1438f8e5873c6e6a3810"
+        },
+        {
+          "created_at_digest": "HMMNZswVg6Td8j32SG5YtNwiN5ovAAVJi81vacrj9ER7",
+          "den_feed": 8,
+          "max_conf_bps": 10000,
+          "num_feed": 110,
+          "source_id": "0x50cf2be41210b5be0f512ec54d02041a512f457a027b751cb0068b6f098d3ea5"
+        }
+      ]
+    },
+    "whitelist": {
+      "enabled": true,
+      "enabled_at": "2026-09-22T17:08:59.675520759Z",
+      "whitelisted_wallets": [
+        "0x1a4673567c649f7e176cb0b73524985f6d6feff8f703900bfa990f90efd1873c",
+        "0x4ac6415d2ca4f75dac45328fed4889c1008ae98ad5544c41dec36b943a5aa65f",
+        "0x674daacb8ad31dce06f8484c230c963859cfa977506685c2ed3902db52648800",
+        "0x83babdba7ac2546685e80a618f3323b8d283b68108a69f77b4b7699d65144936",
+        "0x92321c9423f4f2efd16b148488ed83f2c026f3ca482656d9cfb97989f7357703",
+        "0xa34d39914375832320c5c5af23bcc505144f5924524ebfa2d95e8d145e22c6d7",
+        "0xa625d9a33b441fa56232d30db6c2e30a37186f7778e4327725f8bf361d6c3f86",
+        "0xa71f8873cf5a5f1b0591ee01cc2e9094b1806c5c393a65b4b9dc4f7a1331764f",
+        "0xc3025bef4009e9cad8dba898f5c3b2942b16b0c6e9543dde4a1ce6e14c350378",
+        "0xced6c9e2931582edf018850cd8e8c0b66dba9ad912fc1bfe19f3c40b19a124f7",
+        "0xcee2cca77f6ed54c74498e4094621b9a1fb22253059e2b2abb672b9dd28f2f76",
+        "0xe3071870e0bf9f5a5e9c1985775b61da9c83ccbf1423d7293d8f5de16858d7f5",
+        "0xf16e41beaadacadb883e79cae5ffd15d6fc3b9c47ae73a2142a7ab683e0185ad",
+        "0xf9e4f7f66304ca332d20636b5358b0b9297afbc7428bc107fc5dbc64fb204125"
+      ]
+    }
+  }
+}

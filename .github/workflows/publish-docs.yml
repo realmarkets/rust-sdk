@@ -1,0 +1,59 @@
+name: Publish docs
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  publish-docs:
+    name: Publish docs
+    runs-on: ubuntu-latest
+    environment: docs
+    env:
+      # Secrets come from the `docs` environment (Settings → Environments)
+      DOCS_BUCKET: ${{ secrets.S3_BUCKET_DOCS }}
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID_STABLE }}
+      DOCS_PREFIX: docs.real.xyz
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rust-docs
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DOCS }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_DOCS }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build docs
+        run: |
+          cargo doc -p sdk -p dex -p types -p crypto -p indexer-api --open --no-deps
+      - name: Remove existing docs in target folder (S3)
+        run: |
+          aws s3 rm "s3://${DOCS_BUCKET}/${DOCS_PREFIX}/rust-sdk/" --recursive || true
+      - name: Upload docs to S3
+        run: |
+          # Cargo writes docs to workspace target/doc
+          aws s3 sync "target/doc/" "s3://${DOCS_BUCKET}/${DOCS_PREFIX}/rust-sdk/" --delete
+      - name: Invalidate CloudFront cache for updated docs
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" \
+            --paths "/*"

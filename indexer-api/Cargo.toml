@@ -1,0 +1,26 @@
+[package]
+name = "indexer-api"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish.workspace = true
+
+[features]
+# opt in to the sonic-rs json backend; off by default, so the facade stays on
+# serde_json. enabling it anywhere in a dependency graph flips every consumer of
+# the shared facade at once (cargo feature unification).
+sonic = ["json/sonic"]
+
+[dependencies]
+futures-util = { workspace = true }
+networks = { workspace = true }
+reqwest = { workspace = true, features = ["rustls"] }
+rust_decimal = { workspace = true }
+serde = { workspace = true }
+json = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+urlencoding = { workspace = true }
+
+[lints]
+workspace = true

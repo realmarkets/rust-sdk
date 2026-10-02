@@ -1,0 +1,7 @@
+/target
+.test
+.dir-locals.el
+
+# local key material — never commit
+pkey*.txt
+privkey.sh

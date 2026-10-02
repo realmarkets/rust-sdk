@@ -1,0 +1,85 @@
+{
+  "data": {
+    "coins": {
+      "stable": {
+        "package_id": "0x25afeacdd3b0e757ae40aa4b9852261003e1dffeeb37d2c4f2904bb809807ac9",
+        "type": "0x25afeacdd3b0e757ae40aa4b9852261003e1dffeeb37d2c4f2904bb809807ac9::usdt0::USDT0"
+      }
+    },
+    "deployer": {
+      "address": "0xd438aac7a34a54e96c9c9095c9868d0bc0fd4eaa064e44af96fc0867cc493f39"
+    },
+    "latest_packages": {
+      "account_registry": "0x623057fa29fccdeb8912a6b82c1db93e576b87069deecc8c1f2f0206b41a488f",
+      "address_registry": "0xf432f3588525ba4cc0ba43d68d15af51122f0a435d6a6a5bc3bdbee611edbf25",
+      "bankruptcy": "0xc91a3b3484e29af32079bd5b69c5f47475d1fe797cead53b53c123e7722f2256",
+      "deposit_limit": "0x2f6118df8978278a2f2fa707b540eb965f8786a9d2849aa18905bdd0d4ead780",
+      "exchange": "0xe92eb206a2a10973e0f29a094d7264de3b80a866d860a85e6ad4927686f61bc8",
+      "fixed18": "0x068c8e5b9eaadd04cb353c7c8757c231f3231f013e196393c7ff1aaec1673f43",
+      "funding": "0xbbed9d7e7548a4830945c0880c872178d1e4130fd3b93d98f5a3b03d98a303b7",
+      "metadata": "0xee513b1aa006de85649ee1b0ac01aefb223c7ba9cc34ab5b8740d7e205eaa127",
+      "multisig": "0x700e84a5e03716a2c58eda4be4db8125739148a6cf16ba56a46cd364099648ba",
+      "positions": "0xcfc50c4b2ac3f1152146adf3798dfbfd89694a3f269deb84b27ce06b780d00d2",
+      "price_feed": "0xbd54c554171b5dea62337c8bd808804c1ebddbd02fb16f918014b585d6f266dd",
+      "pyth_lazer": "0x8aa43bd5c14eac8de636e2106f53a1cc9dc2bc0e1a1ad51c9846a0b167552e29",
+      "pyth_lazer_src": "0x9c697b1efdea285dcd3704b9b4b066734f7de322c8e8aef1ef7e27c445d4b9b3",
+      "pyth_lazer_wormhole": "0x675bb3e3ca140ab1b0eac46ab4bb8b73bef365f544b77764a46d79267998ed48",
+      "real_forge": "0xa6bc53164075d450d967a2c3742106d1960389c1a68beabea063157c118d4aa1",
+      "real_helm": "0xa7e5d207c0329063c13e495619ef2ae3d125ad84e3d9f19a7beebc0587b3f23f",
+      "ring_buffer": "0xe7540ae246d62c5297e73a88d26b86e74f0d1bed9cd81085c705daf2523ee33a",
+      "soul_bound": "0x1d8982d9de4bd248f6f3c6642ea2e46356732bc9a0850e043c086b4d018fe1b1",
+      "stable": "0x25afeacdd3b0e757ae40aa4b9852261003e1dffeeb37d2c4f2904bb809807ac9",
+      "tuple": "0xd1c1c6ffa9cf774c3efe42e94199e6f66e150668b7c853e8557bf303ebc333d2",
+      "versioning": "0x2f4184430b70f38d97247a532b4ec7a8e683884dc62bc9f13f1200ef66a83e03",
+      "withdrawal_safeguards": "0xc28e7795b1c7fe55598fb6fa052bfb45cff1e5dd327affce77c6e0d809b9edf5"
+    },
+    "metadata": {
+      "accounts": {},
+      "chain_id": "6364aad5",
+      "checkpoint_sequence": 194727310,
+      "date": "2026-09-23T14:10:53Z",
+      "grpc_network": "https://grpc.mainnet.iota.cafe:443",
+      "rpc_network": "https://api.mainnet.iota.cafe"
+    },
+    "objects": {
+      "account_registry": "0x6b5c4b86a8e20aa3e94cdf79e3e25705635df75462fe2c68999fc447b04d2a3b",
+      "address_registry": "0x77d3d2b8d87f77f3d77b3f945d3e6b467ec7377be96aabf69aae5176253f741a",
+      "address_registry_cap": "0xcb17c60f653a3734b3a6751fbbbd69abaf4310474df1e3245b148d9b8f2a3302",
+      "admin_cap": "0x4e974c02064509e0920b55f9b90296160c4e9ce45edbeb46feb82799befe495e",
+      "exchange": "0xc2eb80d2571506d7bb949e274dbb4180f53bbdec9aab841d57b6fbcaaf497726",
+      "exchange_metadata": "0x3c70baaef94b772930ae1c26f73c34bbe61861b56d99348075352a8669490d41",
+      "fee_config": "0xb0b89d390fb2cbb8683a55b22a7aec017583337fe1db876a44590977b8a7e852",
+      "price_feed_oracle_cap": "0x3d976631be9031ee4caeacfac0849cea21cf890347b77712663783b20a960406",
+      "pyth_lazer_params_cap": "0x96a547ca5b06237bcb73ee4896fb8055f0bcc43208e7f0cecb61e1fcabf2f1fd",
+      "pyth_lazer_state": "0xbfaaf85f467dd5d9af0f064afb61ceb8c5f0f27c480d4a68ccd4d85cf1c634fb",
+      "real_forge": "0x3272a9f9b8f877ec51fbc76a47f5e6c5f2c4579e3d3d506591a5f7da093d4024",
+      "real_helm": "0xb963847ca2c8c3a07d37ca1064862494004f3a64cfbd4972d8df7d5e2871ac23",
+      "stable_coin_metadata": "0x1289f86e29e4160a6cfa0962d8c53ccc99692c42c5744ce60b951b7fa8656d3b",
+      "vault": "0xce941d9171b75780315a19af37e6381f76ec902cc6b3e2b3c774431730bb9d6c"
+    },
+    "packages": {
+      "account_registry": "0x623057fa29fccdeb8912a6b82c1db93e576b87069deecc8c1f2f0206b41a488f",
+      "address_registry": "0xf432f3588525ba4cc0ba43d68d15af51122f0a435d6a6a5bc3bdbee611edbf25",
+      "bankruptcy": "0xc91a3b3484e29af32079bd5b69c5f47475d1fe797cead53b53c123e7722f2256",
+      "deposit_limit": "0x2f6118df8978278a2f2fa707b540eb965f8786a9d2849aa18905bdd0d4ead780",
+      "exchange": "0xe92eb206a2a10973e0f29a094d7264de3b80a866d860a85e6ad4927686f61bc8",
+      "fixed18": "0x068c8e5b9eaadd04cb353c7c8757c231f3231f013e196393c7ff1aaec1673f43",
+      "funding": "0xbbed9d7e7548a4830945c0880c872178d1e4130fd3b93d98f5a3b03d98a303b7",
+      "metadata": "0xee513b1aa006de85649ee1b0ac01aefb223c7ba9cc34ab5b8740d7e205eaa127",
+      "multisig": "0x700e84a5e03716a2c58eda4be4db8125739148a6cf16ba56a46cd364099648ba",
+      "positions": "0xcfc50c4b2ac3f1152146adf3798dfbfd89694a3f269deb84b27ce06b780d00d2",
+      "price_feed": "0xbd54c554171b5dea62337c8bd808804c1ebddbd02fb16f918014b585d6f266dd",
+      "pyth_lazer": "0x8aa43bd5c14eac8de636e2106f53a1cc9dc2bc0e1a1ad51c9846a0b167552e29",
+      "pyth_lazer_src": "0x9c697b1efdea285dcd3704b9b4b066734f7de322c8e8aef1ef7e27c445d4b9b3",
+      "pyth_lazer_wormhole": "0x675bb3e3ca140ab1b0eac46ab4bb8b73bef365f544b77764a46d79267998ed48",
+      "real_forge": "0xa6bc53164075d450d967a2c3742106d1960389c1a68beabea063157c118d4aa1",
+      "real_helm": "0xa7e5d207c0329063c13e495619ef2ae3d125ad84e3d9f19a7beebc0587b3f23f",
+      "ring_buffer": "0xe7540ae246d62c5297e73a88d26b86e74f0d1bed9cd81085c705daf2523ee33a",
+      "soul_bound": "0x1d8982d9de4bd248f6f3c6642ea2e46356732bc9a0850e043c086b4d018fe1b1",
+      "stable": "0x25afeacdd3b0e757ae40aa4b9852261003e1dffeeb37d2c4f2904bb809807ac9",
+      "tuple": "0xd1c1c6ffa9cf774c3efe42e94199e6f66e150668b7c853e8557bf303ebc333d2",
+      "versioning": "0x2f4184430b70f38d97247a532b4ec7a8e683884dc62bc9f13f1200ef66a83e03",
+      "withdrawal_safeguards": "0xc28e7795b1c7fe55598fb6fa052bfb45cff1e5dd327affce77c6e0d809b9edf5"
+    }
+  }
+}
