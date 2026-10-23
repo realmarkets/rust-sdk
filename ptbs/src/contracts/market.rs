@@ -79,22 +79,27 @@ impl Market {
         return Ok(());
     }
 
-    pub async fn update_price(
+    /// Permissionless: sets the market's price. Aborts on a price from another source
+    /// (`EWrongPriceSource`), one not newer than the market's (`EOlderPrice`), or one
+    /// stamped further ahead of `clock` than the market's max lead (`EPriceTooNew`).
+    pub async fn update_price_v2(
         &self,
         builder: &mut TransactionBuilder,
         coin_type: &TypeTag,
         market: impl IntoArgument,
         price: impl IntoArgument,
+        clock: impl IntoArgument,
     ) -> anyhow::Result<()> {
         let market_arg = builder.obj(market, true).await?;
         let price_arg = builder.obj(price, false).await?;
+        let clock_arg = builder.obj(clock, false).await?;
 
         builder.command(Command::new_move_call(
             self.exchange_package_address,
             Identifier::new(self.module_name)?,
-            Identifier::new("update_price")?,
+            Identifier::new("update_price_v2")?,
             vec![coin_type.clone()],
-            vec![market_arg, price_arg],
+            vec![market_arg, price_arg, clock_arg],
         ));
 
         return Ok(());

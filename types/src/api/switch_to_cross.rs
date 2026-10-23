@@ -3,7 +3,7 @@
 //! This module provides the data structures and functionality needed to switch
 //! a position's margin mode to cross. Margin parameter changes are sequencer-only:
 //! the user signs a `Transaction` containing a `Command::SwitchToCross`, the
-//! matching engine validates and applies state, then dispatches an iota execution
+//! matching engine validates and applies state, then dispatches a chain execution
 //! context that submits the corresponding PTB to the chain.
 //!
 //! # Field Aliases

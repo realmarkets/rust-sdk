@@ -44,7 +44,7 @@ jobs:
 
       - name: Build docs
         run: |
-          cargo doc -p sdk -p dex -p types -p crypto -p indexer-api --open --no-deps
+          cargo doc -p sdk -p dex -p types -p crypto -p keyring -p indexer-api --open --no-deps
       - name: Remove existing docs in target folder (S3)
         run: |
           aws s3 rm "s3://${DOCS_BUCKET}/${DOCS_PREFIX}/rust-sdk/" --recursive || true

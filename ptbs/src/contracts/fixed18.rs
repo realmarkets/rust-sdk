@@ -1,5 +1,5 @@
+use alloy_primitives::U256;
 use iota_sdk_types::{Argument, Command, Identifier, ObjectId};
-use move_core_types::u256::U256;
 
 use crate::builder::TransactionBuilder;
 

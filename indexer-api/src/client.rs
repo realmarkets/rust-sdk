@@ -898,12 +898,45 @@ impl Client {
             list_funding_payments
         )
     }
+
+    /// List the funding rate history, one row per market per settlement, with optional
+    /// filters and pagination
+    pub async fn list_funding_rates_historic(
+        &self,
+        params: ListFundingRatesHistoricParams,
+    ) -> IndexerResult<ListFundingRatesHistoricResponse> {
+        let mut url = format!("{}/api/v1/funding-rates/historic", self.base_url);
+
+        let query_string = params.to_query_string();
+        if !query_string.is_empty() {
+            url.push('?');
+            url.push_str(&query_string);
+        }
+
+        let response = self.client.get(&url).send().await?;
+        return self.handle_response(response).await;
+    }
+
+    /// List the whole funding rate history by automatically paginating through all pages
+    pub async fn list_all_funding_rates_historic(
+        &self,
+        filters: Option<ListFundingRatesHistoricFilters>,
+    ) -> IndexerResult<Vec<SettledFundingRate>> {
+        paginate!(
+            self,
+            ListFundingRatesHistoricParams,
+            filters,
+            list_funding_rates_historic
+        )
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use std::{
+        io::{BufRead, BufReader, Write},
         net::{TcpListener, TcpStream},
+        sync::mpsc,
         thread,
         time::Instant,
     };
@@ -913,7 +946,7 @@ mod tests {
     use super::{Client, Duration, parse_api_response};
     use crate::{
         error::Error,
-        types::{Code, ListMarketsResponse},
+        types::{Code, ListAccountsResponse, ListMarketsResponse, MarketTradingMode},
     };
 
     /// Accept connections and never answer, holding them open so a client waits on a response
@@ -933,6 +966,57 @@ mod tests {
         });
 
         return format!("http://{addr}");
+    }
+
+    /// Answer a single request with `body` as a 200 and report that request's target (path and
+    /// query) on the returned channel. Returns the bound base url.
+    fn one_shot_server(body: &'static str) -> (String, mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback listener");
+        let addr = listener.local_addr().expect("read listener addr");
+        let (tx, rx) = mpsc::channel();
+
+        thread::spawn(move || {
+            let (stream, _) = listener.accept().expect("accept the client");
+            let mut reader = BufReader::new(&stream);
+            let mut line = String::new();
+            reader.read_line(&mut line).expect("read the request line");
+            let target = line
+                .split_whitespace()
+                .nth(1)
+                .unwrap_or_default()
+                .to_string();
+            // drain the headers: closing with unread input resets the connection
+            while line != "\r\n" {
+                line.clear();
+                reader.read_line(&mut line).expect("read a header line");
+            }
+            tx.send(target).expect("report the request target");
+
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            (&stream)
+                .write_all(response.as_bytes())
+                .expect("write the response");
+        });
+
+        return (format!("http://{addr}"), rx);
+    }
+
+    #[tokio::test]
+    async fn paginated_listing_requests_the_servers_maximum_page() {
+        let (base_url, request_target) =
+            one_shot_server(r#"{"data":[],"pagination":{"next_cursor":null}}"#);
+        let client = Client::new(base_url, "ws://127.0.0.1:1").expect("build client");
+
+        let accounts = client.list_all_accounts(None).await.expect("list accounts");
+
+        assert!(accounts.is_empty());
+        assert_eq!(
+            request_target.recv().expect("the listing sent one request"),
+            "/api/v1/accounts?p[s]=1000"
+        );
     }
 
     #[tokio::test]
@@ -1010,6 +1094,58 @@ mod tests {
             e.to_string().contains("pagination"),
             "error should name the missing field: {e}"
         );
+    }
+
+    // an account the registry never registered has no owner and no index: one such row used
+    // to fail the whole listing (`invalid type: null, expected a string`)
+    #[test]
+    fn an_unregistered_account_decodes_without_an_index_or_an_address() {
+        let body = br#"{"data":[{"node_state_version":"21793","id":"0xacc","account_object_id":"0xobj","created_at_ms":1792003084156,"registered_at_ms":null,"updated_at_ms":1792003735927,"address":null,"account_index":null,"asset_id":"0x2::usdc::USDC","unrealised_pnl":"0","realised_pnl":"0","equity":"0","margin_allocated_cross_contracts":null,"margin_allocated_isolated_contracts":null,"margin_allocated_orders":null,"available_balance":"0","settled_balances":[{"asset_id":"0x2::usdc::USDC","balance":"12.5"}],"can_deposit":true,"can_withdraw":true,"can_trade":true,"is_rate_limit_exempt":false,"is_deposit_limit_exempt":false,"is_withdrawal_safeguard_exempt":true,"order_indexing_suspended":false,"cooldown_withdrawal_count":0,"cooldown_withdrawal_total":"0","account_withdrawal_count_delay_active":false,"account_cumulative_withdrawal_delay_active":false,"values_refreshed_at_ms":1792003735927,"maker_fee_tier":0,"taker_fee_tier":0,"discount_tier":0}],"pagination":{"next_cursor":null}}"#;
+
+        let resp: ListAccountsResponse = parse_api_response(StatusCode::OK, body).unwrap();
+
+        let [account] = resp.data.as_slice() else {
+            panic!("expected one account, got {}", resp.data.len());
+        };
+        assert_eq!(account.account_index, None);
+        assert_eq!(account.address, None);
+        assert_eq!(account.registered_at_ms, None);
+        assert!(account.is_withdrawal_safeguard_exempt);
+        let [balance] = account.settled_balances.as_slice() else {
+            panic!("expected one settled balance");
+        };
+        assert_eq!(balance.asset_id, "0x2::usdc::USDC");
+        assert_eq!(balance.balance.to_string(), "12.5");
+    }
+
+    // an indexer from before account registrations and settled balances serves neither, nor
+    // the safeguard exemption: the account still decodes, with those fields at their defaults
+    #[test]
+    fn an_account_from_an_older_indexer_decodes_without_the_newer_fields() {
+        let body = br#"{"data":[{"node_state_version":"21793","id":"0xacc","account_object_id":"0xobj","created_at_ms":1792003084156,"updated_at_ms":1792003735927,"address":"0xowner","account_index":"3","asset_id":"0x2::usdc::USDC","unrealised_pnl":"0","realised_pnl":"0","equity":"0","margin_allocated_cross_contracts":null,"margin_allocated_isolated_contracts":null,"margin_allocated_orders":null,"available_balance":"0","can_deposit":true,"can_withdraw":true,"can_trade":true,"is_rate_limit_exempt":false,"is_deposit_limit_exempt":false,"order_indexing_suspended":false,"cooldown_withdrawal_count":0,"cooldown_withdrawal_total":"0","account_withdrawal_count_delay_active":false,"account_cumulative_withdrawal_delay_active":false,"values_refreshed_at_ms":1792003735927,"maker_fee_tier":0,"taker_fee_tier":0,"discount_tier":0}],"pagination":{"next_cursor":null}}"#;
+
+        let resp: ListAccountsResponse = parse_api_response(StatusCode::OK, body).unwrap();
+
+        let [account] = resp.data.as_slice() else {
+            panic!("expected one account, got {}", resp.data.len());
+        };
+        assert_eq!(account.account_index.as_deref(), Some("3"));
+        assert_eq!(account.address.as_deref(), Some("0xowner"));
+        assert_eq!(account.registered_at_ms, None);
+        assert!(account.settled_balances.is_empty());
+        assert!(!account.is_withdrawal_safeguard_exempt);
+    }
+
+    #[test]
+    fn a_markets_sequencer_status_is_read_from_its_trading_mode() {
+        let current = r#"{"sequencer_status":1,"effective_mode":"ContinuousTrading","dex_global":{"mode":"ContinuousTrading","schedule":[]},"admin":{"mode":"ContinuousTrading","schedule":[]},"system":[],"next_effective_mode":null,"next_effective_mode_at_ms":null}"#;
+        let mode: MarketTradingMode = json::from_str(current).unwrap();
+        assert_eq!(mode.sequencer_status, 1);
+
+        // an indexer from before the move carried the bitset on the market instead
+        let older = r#"{"effective_mode":"ContinuousTrading","dex_global":{"mode":"ContinuousTrading","schedule":[]},"admin":{"mode":"ContinuousTrading","schedule":[]},"system":[],"next_effective_mode":null}"#;
+        let mode: MarketTradingMode = json::from_str(older).unwrap();
+        assert_eq!(mode.sequencer_status, 0);
     }
 
     #[test]

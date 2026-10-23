@@ -4,7 +4,7 @@
 //!
 //! ```bash
 //! cargo run --example create_account -- \
-//!   --private-key iotaprivkey1... \
+//!   --private-key <bech32 private key> \
 //!   --iota-network testnet \
 //!   --account-index 0
 //! ```
@@ -27,11 +27,11 @@ struct Args {
     #[arg(long, default_value = Network::Testnet.indexer_url())]
     indexer_url: String,
 
-    /// Your IOTA private key (iotaprivkey1...)
+    /// Your bech32-encoded private key
     #[arg(short, long)]
     private_key: String,
 
-    /// IOTA network to connect to (devnet, testnet, mainnet, or custom URL)
+    /// Network to connect to (devnet, testnet, mainnet, or custom gRPC URL)
     #[arg(long, default_value = "testnet")]
     iota_network: String,
 
@@ -54,7 +54,7 @@ async fn main() -> Result<()> {
     // Create configuration from artifacts
     let config: AccountsConfig = artifacts.into();
 
-    // Connect to IOTA network
+    // Connect to the network
     let network = parse_network(&args.iota_network)?;
     let client = build_iota_client(&network).await?;
 
@@ -92,7 +92,7 @@ fn parse_network(network: &str) -> Result<IotaNetwork> {
             Ok(IotaNetwork::Custom(url.to_string()))
         }
         _ => Err(anyhow::anyhow!(
-            "Invalid network: {}. Must be 'devnet', 'testnet', 'mainnet', or a custom URL",
+            "Invalid network: {}. Must be 'devnet', 'testnet', 'mainnet', or a custom gRPC URL",
             network
         )),
     }

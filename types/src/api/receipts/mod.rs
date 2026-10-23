@@ -98,6 +98,11 @@ pub struct Conditional {
     pub oco_link: Option<OcoOrderLink>,
     /// Current status of the conditional
     pub status: ConditionalStatus,
+    /// Whether the order closes on trigger: once triggered, it cancels the
+    /// account's other orders on this market as far as its margin needs. Absent
+    /// from a sequencer that predates the flag, and read as `false`.
+    #[serde(default)]
+    pub close_on_trigger: bool,
 }
 
 /// The order as the matching engine accepted (or rejected) it.

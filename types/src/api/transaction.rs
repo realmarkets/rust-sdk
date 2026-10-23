@@ -262,6 +262,10 @@ pub struct TransactionPayload {
     pub commands: Vec<Command>,
 }
 
+/// The most commands one transaction may carry. The sequencer refuses a
+/// payload with more as a whole, with `TooManyCommands` (431).
+pub const MAX_TRANSACTION_COMMANDS: usize = 1_000;
+
 /// Builder for constructing `TransactionPayload` instances.
 ///
 /// This builder provides a fluent interface for constructing transaction payloads
@@ -298,6 +302,11 @@ pub enum TransactionPayloadBuilderError {
     /// - `commands`: At least one command must be provided
     #[error("Missing required field: {field}")]
     MissingField { field: &'static str },
+
+    /// The payload carries more than [`MAX_TRANSACTION_COMMANDS`] commands, which
+    /// the sequencer refuses with `TooManyCommands` (431).
+    #[error("Too many commands: {count}, at most {max}", max = MAX_TRANSACTION_COMMANDS)]
+    TooManyCommands { count: usize },
 }
 
 impl TransactionPayloadBuilder {
@@ -466,6 +475,9 @@ impl TransactionPayloadBuilder {
     /// - `chain_id` has not been set
     /// - No commands have been added (at least one is required)
     ///
+    /// Returns `TransactionPayloadBuilderError::TooManyCommands` if more than
+    /// [`MAX_TRANSACTION_COMMANDS`] commands have been added.
+    ///
     /// # Notes
     ///
     /// The `sender` field is optional during building and defaults to an empty string
@@ -505,6 +517,12 @@ impl TransactionPayloadBuilder {
 
         if self.commands.is_empty() {
             return Err(TransactionPayloadBuilderError::MissingField { field: "commands" });
+        }
+
+        if self.commands.len() > MAX_TRANSACTION_COMMANDS {
+            return Err(TransactionPayloadBuilderError::TooManyCommands {
+                count: self.commands.len(),
+            });
         }
 
         return Ok(TransactionPayload {
@@ -629,7 +647,7 @@ impl TransactionPayload {
 /// let tx = Transaction::builder()
 ///     .client_request_id("393e6d50-7cf7-4069-a758-0e837e7178bc")
 ///     .payload(payload)
-///     .sign_and_build("iotaprivkey1qrsd...")
+///     .sign_and_build("<bech32 private key>")
 ///     .expect("Failed to sign");
 /// # }
 /// ```
@@ -692,7 +710,7 @@ pub enum TransactionBuilderError {
 ///
 /// let tx = Transaction::builder()
 ///     .payload(payload)
-///     .sign_and_build("iotaprivkey1qrsd...")
+///     .sign_and_build("<bech32 private key>")
 ///     .expect("Failed to sign");
 /// # }
 /// ```
@@ -1040,7 +1058,53 @@ impl Transaction {
 mod tests {
     use base64_simd::STANDARD as BASE64;
 
-    use crate::api::{TransactionPayload, errors::ErrorString};
+    use crate::api::{
+        CancelOrderRequest, Command, MAX_TRANSACTION_COMMANDS, TransactionPayload,
+        TransactionPayloadBuilderError, errors::ErrorString,
+    };
+
+    fn cancels(count: usize) -> Vec<Command> {
+        let cancel = Command::CancelOrder(
+            CancelOrderRequest::builder()
+                .account("0x123")
+                .market("0x123")
+                .order_id(42)
+                .build()
+                .unwrap(),
+        );
+        return vec![cancel; count];
+    }
+
+    fn payload_of(
+        commands: Vec<Command>,
+    ) -> Result<TransactionPayload, TransactionPayloadBuilderError> {
+        return TransactionPayload::builder()
+            .nonce(1)
+            .chain_id("real-1")
+            .commands(commands)
+            .build();
+    }
+
+    #[test]
+    fn the_builder_accepts_the_most_commands_a_transaction_may_carry() {
+        let payload = payload_of(cancels(MAX_TRANSACTION_COMMANDS)).unwrap();
+
+        assert_eq!(payload.commands.len(), MAX_TRANSACTION_COMMANDS);
+    }
+
+    #[test]
+    fn the_builder_refuses_one_command_more() {
+        let result = payload_of(cancels(MAX_TRANSACTION_COMMANDS + 1));
+
+        assert!(
+            matches!(
+                result,
+                Err(TransactionPayloadBuilderError::TooManyCommands { count })
+                    if count == MAX_TRANSACTION_COMMANDS + 1
+            ),
+            "{result:?}"
+        );
+    }
 
     fn payload_for_chain(chain_id: &str) -> TransactionPayload {
         return TransactionPayload {

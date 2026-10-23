@@ -2,7 +2,7 @@
 //!
 //! Margin parameter changes are sequencer-only: the user signs a `Transaction`
 //! containing a `Command::SwitchToIsolated`, the matching engine validates and
-//! applies state, then dispatches an iota execution context that submits the
+//! applies state, then dispatches a chain execution context that submits the
 //! corresponding PTB to the chain.
 //!
 //! # Field Aliases

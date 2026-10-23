@@ -19,8 +19,8 @@
 //! - **OrderError**: Specific error conditions for order rejection
 //!
 //! ## Accounts, Margin and Liquidation
-//! - **MarginMode**, **MarginParameterError**, **LiquidationStatus**,
-//!   **TradeType**, **MultiSigOutcome**, **MarketVersion**
+//! - **MarginMode**, **SelfTradePrevention**, **MarginParameterError**,
+//!   **LiquidationStatus**, **TradeType**, **MultiSigOutcome**, **MarketVersion**
 //!
 //! # Decimal Handling
 //!
@@ -131,6 +131,44 @@ impl MarginMode {
     }
 }
 
+/// What the engine does when an account's incoming order would trade against
+/// one of the same account's resting orders.
+///
+/// The setting belongs to the account, so the incoming order and the resting
+/// one always answer to the same mode. A self-trade never prints: whichever
+/// order the mode cancels is reported as `Cancelled` with
+/// [`OrderError::OrderSelfTrading`]. A post-only order that would cross its
+/// own resting order is still rejected as
+/// [`OrderError::PostOnlyOrderWouldTrade`] in every mode.
+///
+/// # JSON Representation
+///
+/// ```json
+/// "CancelTaker"  // Default: stop the incoming order at its own resting order
+/// "CancelMaker"  // Cancel the resting order, keep matching
+/// "CancelBoth"   // Stop the incoming order and cancel that resting order
+/// ```
+#[derive(Copy, Default, Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum SelfTradePrevention {
+    /// The incoming order stops at its first own resting order: fills before
+    /// it stand, the rest of the incoming order is cancelled, and the resting
+    /// order is untouched. A fill-or-kill order is rejected instead. Every
+    /// account starts here: it is the rule the engine applied to all accounts
+    /// before the setting existed.
+    #[default]
+    CancelTaker,
+
+    /// Every own resting order the incoming order reaches is cancelled, and
+    /// the incoming order carries on matching the liquidity behind it. A
+    /// fill-or-kill order counts only other accounts' liquidity: when that is
+    /// not enough it is killed and no resting order is cancelled.
+    CancelMaker,
+
+    /// As [`SelfTradePrevention::CancelTaker`], and the own resting order the
+    /// incoming order stopped at is cancelled too.
+    CancelBoth,
+}
+
 /// The type of trade, indicating whether it's a normal match or a liquidation variant.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TradeType {
@@ -142,6 +180,9 @@ pub enum TradeType {
 }
 
 /// Status of a liquidation outcome indicating what actions were taken.
+///
+/// Nothing emits it: the engine's `LiquidationTriggered` event, which carried it, was
+/// replaced by `LiquidationExecuted` and its `LiquidationOutcome`.
 ///
 /// This enum describes the result of a liquidation attempt, ranging from
 /// full position closure to rejection. It provides detailed information
@@ -389,6 +430,13 @@ pub enum OrderError {
     /// match against the same account's sell order. Self-trading is typically
     /// prohibited to prevent wash trading and market manipulation.
     ///
+    /// Which order carries it depends on the account's
+    /// [`SelfTradePrevention`] mode: the incoming order under `CancelTaker`
+    /// (the default), each resting order cancelled under `CancelMaker`, and
+    /// both under `CancelBoth`. Either way the order is `Cancelled`, except a
+    /// fill-or-kill order stopped at its own resting order, which is
+    /// `Rejected`.
+    ///
     /// # Resolution
     /// - Adjust order price to avoid crossing own orders
     /// - Cancel existing orders on the opposite side
@@ -402,9 +450,9 @@ pub enum OrderError {
     /// - Market making with insufficient price separation
     ///
     /// # Prevention
-    /// Many trading systems provide self-trade prevention (STP) modes that
-    /// automatically handle this situation by cancelling one or both orders
-    /// rather than rejecting the new order.
+    /// An account on `CancelMaker` has its own resting orders cancelled
+    /// instead, and its incoming order keeps matching the liquidity behind
+    /// them.
     OrderSelfTrading,
 
     /// Conditional order with percentage quantity has invalid position.
@@ -470,8 +518,8 @@ pub enum OrderError {
     /// post-only order.
     TradingModeViolationPostOnly,
 
-    /// order rejected: the market is `ReduceOnly` and the order is neither
-    /// reduce-only nor a market maker's post-only order.
+    /// order rejected: the market is `ReduceOnly`, the order is not reduce-only
+    /// and the account is not one of the market's market makers.
     TradingModeViolationReduceOnly,
 
     /// order rejected: the platform is in `Restricted` mode and the account is
@@ -490,7 +538,8 @@ pub enum OrderError {
     /// order partially or fully stopped because matching would trade outside the price bound.
     ///
     /// the trading bound is a configurable % distance from the mark price.
-    /// aggressive orders are stopped before trading outside this range.
+    /// aggressive orders are stopped before trading outside this range. a FOK
+    /// killed because the band kept it from filling in full carries this too.
     PriceBoundStopped,
 
     /// order partially or fully stopped because matching would breach the market's
@@ -512,6 +561,42 @@ pub enum OrderError {
     /// there is no position for it to protect.
     ConditionalLinkedOrderNeverTraded,
 
+    /// linked conditional rejected: the referenced parent is itself a conditional order.
+    ///
+    /// only a plain order can be a parent. a conditional — pending, dormant behind its
+    /// own parent, or already triggered — is refused, so order links never chain
+    /// conditionals together.
+    ConditionalLinkedOrderIsConditional,
+
+    /// OCO conditional rejected: no order of the account on this market goes by
+    /// the id or client order id its OCO link names.
+    ///
+    /// # Resolution
+    /// - name a conditional of the same account and market that is still waiting
+    ///   to trigger
+    OcoLinkedOrderNotFound,
+
+    /// OCO conditional rejected: the order its OCO link names is not a conditional
+    /// still waiting to trigger — a plain order, or a conditional that has already
+    /// triggered or ended, including earlier in the same transaction.
+    OcoLinkedOrderNotPending,
+
+    /// OCO conditional rejected: the order its OCO link names is already in a
+    /// pair, as the order naming another or as the one another names.
+    ///
+    /// OCO links pairs only: the first order of a pair names nothing, and no
+    /// order is named twice.
+    OcoLinkedOrderAlreadyLinked,
+
+    /// OCO conditional rejected: the order its OCO link names is on the other
+    /// side. both orders of a pair buy, or both sell.
+    OcoSideMismatch,
+
+    /// OCO conditional rejected: the order its OCO link names has the same
+    /// trigger condition. one order of a pair rises above its trigger, the other
+    /// falls below its own.
+    OcoTriggerConditionMismatch,
+
     /// the order's fills would leave an isolated position underwater: its
     /// order-net equity — the collateral it keeps once its resting orders are
     /// cancelled, plus unrealised pnl — negative, or, for fills that close it
@@ -532,6 +617,79 @@ pub enum OrderError {
     /// - a position already underwater exits through liquidation, not through
     ///   its own orders
     WouldBankruptIsolatedPosition,
+
+    /// order rejected: the account's position on this market is at or over the
+    /// market's position cap (`max_position_notional`), valued at mark, so the
+    /// account may only reduce it.
+    ///
+    /// the cap is the largest position value, in settlement-asset terms, one
+    /// account may hold on the market. a position can reach it through its own
+    /// fills or pass it as the mark price moves.
+    ///
+    /// # Resolution
+    /// - submit the order as reduce-only
+    /// - reduce the position until its value at mark is below the cap
+    PositionLimitReduceOnly,
+
+    /// filling the order would take the position past the market's position cap
+    /// (`max_position_notional`) at mark.
+    ///
+    /// - **on a rejected order:** if it and every other order the account has
+    ///   resting on the same side of this market's book filled, the position
+    ///   would be worth more than the cap. an order held by the maker shield, or
+    ///   a conditional, is checked when it is released, so it can be rejected
+    ///   then rather than at submission.
+    /// - **on a cancelled resting order:** resting orders are checked against
+    ///   the cap every minute, and again whenever one of the account's new
+    ///   orders is refused by it. an order is cancelled when it, plus every order
+    ///   of the account on its side that would trade before it, would leave the
+    ///   position worth more than the cap, either larger than it is now or
+    ///   flipped to the other side. reduce-only orders never are.
+    ///
+    /// orders are valued at the mark price, not at their own price, and an order
+    /// that would flip the position counts the size it would open on the other
+    /// side.
+    ///
+    /// # Resolution
+    /// - submit a smaller order
+    /// - cancel some of the account's orders on the same side first
+    PositionLimitExceeded,
+
+    /// on a cancelled resting order: it was cancelled to make room for the
+    /// margin of one of the account's close-on-trigger orders on the same market.
+    ///
+    /// when a triggered close-on-trigger order is refused because the account's
+    /// free margin is short, the account's other orders on that market are
+    /// cancelled one at a time — first those on the side that would grow the
+    /// position, then those on the closing side, then reduce-only ones, each
+    /// group worst price first, then newest — until the close-on-trigger order
+    /// passes. orders are cancelled only once that point is known to be reached.
+    CancelledForCloseOnTrigger,
+
+    /// on a cancelled conditional order: the other order of its one-cancels-other
+    /// pair triggered, was cancelled, or expired.
+    ///
+    /// when both orders of a pair leave together, the first keeps its own fate,
+    /// and the second is cancelled this way only if it was about to fire. when
+    /// all the account's orders go at once (cancel-all, liquidation,
+    /// settlement), both orders of a pair go with the rest, without this error.
+    CancelledByOco,
+
+    /// the order would not reduce a position whose IMR is below its market's.
+    ///
+    /// a position keeps the IMR it was created with, or last given by `set_imr`, so
+    /// after the market's IMR is raised an existing position can sit below it. until
+    /// its IMR is at least the market's, the position takes only orders that shrink
+    /// it: on the side opposite its contracts (so none while it holds none), that
+    /// leave it no larger and on the same side once filled, and whose remainder, with
+    /// the account's other orders resting on that side, covers no more than the
+    /// contracts left. a conditional that triggers counts as a new order. orders that
+    /// were resting before the raise keep resting and may fill.
+    ///
+    /// # Resolution
+    /// - submit an order that reduces the position
+    /// - set the position's IMR to at least the market's (`set_imr`)
+    ImrBelowMarketReduceOnly,
 }
 
 /// Reasons why a sequenced margin-parameter command (`switch_to_cross`,
@@ -564,6 +722,12 @@ pub enum MarginParameterError {
     /// group holding less than the position is under water by. nothing moved;
     /// close some of the position or wait for the mark before retrying.
     WouldBankruptIsolatedPosition,
+    /// a switch to isolated is refused while the position keeps an IMR below its
+    /// market's, which only a raise of the market's IMR produces: it would fund the
+    /// whole position into a pool at that lower IMR. set the position's IMR to at
+    /// least the market's first. not to be confused with `ImrBelowMarketMinimum`, a
+    /// `set_imr` value below the market's.
+    PositionImrBelowMarket,
 }
 
 /// Outcome of applying a v2 multisig envelope. Carries either the accepted
@@ -599,13 +763,15 @@ pub enum MultiSigOutcome {
 ///   Delayed  — aggressive order held back by the maker shield
 ///   Pending  — order carrying a conditional that has not triggered yet
 ///
-/// Delayed → Active                        (shield window elapses)
-/// Pending → Active                        (conditional triggers)
+/// Delayed → Active | Rejected             (shield window elapses; the entry checks run again)
+/// Pending → Active | Rejected             (conditional triggers; the entry checks run)
 /// Pending → Expired | Cancelled           (conditional expires, or is cancelled)
 /// Active  → Filled | Cancelled | Expired | LiquidationCancelled
 ///
-/// terminal at submission, never live:
-///   Rejected — validation refused the order; `error` carries the OrderError
+/// terminal without ever resting on the book:
+///   Rejected — validation or the entry checks refused the order, at submission
+///              or when a Delayed or Pending order is released; `error` carries
+///              the OrderError
 ///   Killed   — a FOK order could not be filled in full
 /// ```
 ///
@@ -618,7 +784,8 @@ pub enum MultiSigOutcome {
 ///
 /// ## Final States (Terminal)
 /// - **Filled**: Order completely executed
-/// - **Cancelled**: Order cancelled by the client
+/// - **Cancelled**: Order cancelled by the client, or stopped by the engine, in which
+///   case `error` says why (e.g. `OrderSelfTrading`, `PositionLimitExceeded`)
 /// - **Expired**: GTT expiry, or a conditional that expired without triggering
 /// - **Killed**: A FOK order could not be filled in full
 /// - **Rejected**: Order rejected by validation, carries an `OrderError`
@@ -775,8 +942,9 @@ pub enum OrderStatus {
     /// FOK order's reachable volume is short of its quantity — because the book
     /// is thin, because the trading band puts the rest of the book out of reach,
     /// or because the open-interest cap clips the fill. `stopped_quantity`
-    /// carries the whole order and `error` is
-    /// [`OrderError::FokOrderCannotBeFullyFilled`].
+    /// carries the whole order. `error` is [`OrderError::PriceBoundStopped`]
+    /// when the order would have filled in full without the band, and
+    /// [`OrderError::FokOrderCannotBeFullyFilled`] otherwise.
     ///
     /// # Characteristics
     /// - Terminal, and reached at submission — the order never rests

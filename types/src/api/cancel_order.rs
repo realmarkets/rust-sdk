@@ -129,6 +129,7 @@ use crate::core::{AccountId, MarketId};
 /// - The market field is not empty and the market exists (201 / 202)
 /// - The account field is not empty (203)
 /// - `order_id` and `client_order_id` are not both set (204)
+/// - `client_order_id`, when set, is not empty (205)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CancelOrderRequest {
     /// The market identifier where the order should be canceled.
@@ -565,7 +566,9 @@ impl CancelOrderRequestBuilder {
     /// # Errors
     ///
     /// Returns `CancelOrderRequestBuilderError::MissingField` if either the `market`
-    /// or `account` fields have not been set.
+    /// or `account` fields have not been set, and
+    /// `CancelOrderRequestBuilderError::InvalidFieldValue` if either does not parse
+    /// or the client order id is the empty string.
     ///
     /// # Examples
     ///
@@ -609,6 +612,14 @@ impl CancelOrderRequestBuilder {
             }
         })?;
 
+        // the sequencer refuses an empty client order id (error 205)
+        if self.client_order_id.as_deref() == Some("") {
+            return Err(CancelOrderRequestBuilderError::InvalidFieldValue {
+                field: "client_order_id",
+                value: String::new(),
+            });
+        }
+
         Ok(CancelOrderRequest {
             market_id,
             market: market.into(),
@@ -649,7 +660,27 @@ impl CancelOrderRequest {
 
 #[cfg(test)]
 mod tests {
-    use super::CancelOrderRequest;
+    use super::{CancelOrderRequest, CancelOrderRequestBuilderError};
+
+    #[test]
+    fn the_builder_refuses_an_empty_client_order_id() {
+        let result = CancelOrderRequest::builder()
+            .market("0x123")
+            .account("0x123")
+            .client_order_id("")
+            .build();
+
+        assert!(
+            matches!(
+                result,
+                Err(CancelOrderRequestBuilderError::InvalidFieldValue {
+                    field: "client_order_id",
+                    ..
+                })
+            ),
+            "{result:?}"
+        );
+    }
 
     #[test]
     fn test_deserialize_client_order_id_alias() {

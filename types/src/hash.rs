@@ -1,8 +1,8 @@
 //! transaction hashing: SHA3-256 over raw byte parts, 0x-prefixed lowercase
 //! hex output. this is the transaction *identity* hash — what
 //! `Transaction::hash_of` computes and the indexer records as `tx_hash` — not a
-//! signing digest: signing lives in the `crypto` crate and goes through the IOTA
-//! intent (blake2b256).
+//! signing digest: signing lives in the `crypto` crate and goes through the
+//! signing intent (blake2b256).
 //!
 //! the `asm-keccak` feature is off by default: the `[features]` table declares no
 //! `default`, and only the engine-side crates (admission, rpc, reald) opt in. with

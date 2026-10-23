@@ -10,9 +10,9 @@
 //! - **Advanced Time-In-Force Options**: GTC, GTT, IOC, FOK with full validation
 //! - **Field Aliases**: Compact field aliases for efficient serialization
 //! - **Builder Pattern**: Type-safe construction with comprehensive validation
-//! - **Conditional Orders**: Stop-loss and take-profit. Trailing-stop triggers
-//!   and OCO links are reserved vocabulary the sequencer rejects
-//!   (`TrailingStopTriggersNotSupported` 125, `OcoOrdersNotSupported` 129)
+//! - **Conditional Orders**: Stop-loss and take-profit, paired one-cancels-other
+//!   (OCO). Trailing-stop triggers are reserved vocabulary the sequencer rejects
+//!   (`TrailingStopTriggersNotSupported` 125)
 //! - **Order Linking**: Parent-child order relationships and activation triggers
 //! - **Position Management**: Reduce-only and post-only order flags
 //!
@@ -69,12 +69,16 @@
 //!     .build()
 //!     .expect("Failed to build conditional");
 //!
+//! // a closing order is reduce-only: without the flag it is refused at trigger
+//! // whenever the market is reduce-only or the position is at the market's
+//! // position cap, which is when a stop is most likely to fire
 //! let order = SubmitOrderRequest::builder()
 //!     .market("0x789")
 //!     .account("0x789")
 //!     .sell()
 //!     .market_order()
 //!     .immediate_or_cancel()
+//!     .reduce_only(true)
 //!     .conditional(stop_loss)
 //!     .build()
 //!     .expect("Failed to build order");
@@ -121,12 +125,56 @@
 //! order carrying one with `TrailingStopTriggersNotSupported` (125).
 //! [`Trigger::price`] is the only trigger it admits.
 //!
-//! ## OCO (one-cancels-other) — not supported
+//! ## OCO (one-cancels-other) stop loss and take profit
 //!
-//! `oco_order_link_client_order_id` / `oco_order_link_order_id` (`ococid` /
-//! `ocooid`) are reserved vocabulary: the sequencer rejects any conditional
-//! carrying either with `OcoOrdersNotSupported` (129). Submit the two legs as
-//! independent conditional orders and cancel the loser yourself.
+//! The second order names the first by `oco_link_client_id` (`ococid`) or
+//! `oco_link_order_id` (`ocooid`); the first names nothing. Both are
+//! conditionals of the same account and market, on the same side, one rising
+//! above its trigger and the other falling below its own. Whenever one
+//! triggers, is cancelled or expires, the other is cancelled.
+//! ```rust
+//! use types::api::submit_order::{Conditional, SubmitOrderRequest, Trigger};
+//!
+//! let take_profit = SubmitOrderRequest::builder()
+//!     .market("0x789")
+//!     .account("0x789")
+//!     .sell()
+//!     .limit_order("55000.00")
+//!     .good_till_cancel()
+//!     .reduce_only(true)
+//!     .client_order_id("tp")
+//!     .conditional(
+//!         Conditional::builder()
+//!             .rises_above()
+//!             .trigger(Trigger::price("55000.00"))
+//!             .last_trade_price()
+//!             .percentage_of_position_at_trigger("1.0")
+//!             .build()
+//!             .expect("Failed to build conditional"),
+//!     )
+//!     .build()
+//!     .expect("Failed to build order");
+//!
+//! let stop_loss = SubmitOrderRequest::builder()
+//!     .market("0x789")
+//!     .account("0x789")
+//!     .sell()
+//!     .market_order()
+//!     .immediate_or_cancel()
+//!     .reduce_only(true)
+//!     .conditional(
+//!         Conditional::builder()
+//!             .falls_below()
+//!             .trigger(Trigger::price("45000.00"))
+//!             .last_trade_price()
+//!             .percentage_of_position_at_trigger("1.0")
+//!             .oco_link_client_id("tp")
+//!             .build()
+//!             .expect("Failed to build conditional"),
+//!     )
+//!     .build()
+//!     .expect("Failed to build order");
+//! ```
 //!
 //! ## Order-linked activation (parent/child)
 //! ```rust
@@ -663,10 +711,22 @@ pub struct ConditionalExpiry {
 /// - `order_linked_activation_client_order_id` + `order_linked_activation_fill_quantity`
 /// - `order_linked_activation_order_id` + `order_linked_activation_fill_quantity`
 ///
-/// ### OCO (One-Cancels-Other) Relationships — not supported
-/// `oco_order_link_client_order_id` and `oco_order_link_order_id` are reserved
-/// wire vocabulary. Setting either makes the sequencer reject the whole
-/// transaction with `OcoOrdersNotSupported` (129); nothing links the two legs.
+/// The parent must be a plain order in the same market. A conditional order —
+/// pending, dormant behind its own parent, or already triggered — is never a
+/// parent, and a link to one is rejected with `ConditionalLinkedOrderIsConditional`.
+///
+/// ### OCO (One-Cancels-Other) Pairs
+/// The second order of a pair names the first by
+/// `oco_order_link_client_order_id` or `oco_order_link_order_id`; the first
+/// names nothing. Whenever either triggers, is cancelled or expires, the other is
+/// cancelled, reported with `CancelledByOco`. When all of the account's orders
+/// go at once (cancel-all, liquidation, settlement), both go with the rest,
+/// without `CancelledByOco`. The order named must be a
+/// conditional of the same account and market still waiting to trigger, pending
+/// or dormant, in no pair yet, on the same side and with the opposite trigger
+/// condition; the sequencer rejects the link otherwise (`OcoLinkedOrderNotFound`,
+/// `OcoLinkedOrderNotPending`, `OcoLinkedOrderAlreadyLinked`, `OcoSideMismatch`,
+/// `OcoTriggerConditionMismatch`).
 ///
 /// # Examples
 ///
@@ -688,6 +748,7 @@ pub struct ConditionalExpiry {
 ///     order_linked_activation_fill_quantity: None,
 ///     oco_order_link_client_order_id: None,
 ///     oco_order_link_order_id: None,
+///     close_on_trigger: false,
 /// };
 /// ```
 ///
@@ -719,11 +780,19 @@ pub struct ConditionalExpiry {
 ///     .expect("Failed to build conditional");
 /// ```
 ///
-/// ## OCO bracket orders — not supported
+/// ## A stop paired one-cancels-other with a take profit named "tp"
+/// ```rust
+/// use types::api::submit_order::{Conditional, Trigger};
 ///
-/// `oco_link_client_id` / `oco_link_order_id` build a `Conditional` the
-/// sequencer always rejects (`OcoOrdersNotSupported`, 129). Submit the
-/// take-profit and the stop as two independent conditional orders.
+/// let stop = Conditional::builder()
+///     .falls_below()
+///     .trigger(Trigger::price("45000.00"))
+///     .last_trade_price()
+///     .percentage_of_position_at_trigger("1.0")
+///     .oco_link_client_id("tp")
+///     .build()
+///     .expect("Failed to build conditional");
+/// ```
 ///
 /// # JSON Examples
 ///
@@ -768,9 +837,14 @@ pub struct ConditionalExpiry {
 ///    `(0,1]`; `OrderLink` / `FilledOrderLink` are rejected (133)
 /// 3. **Expiry**: if present, in the future and no later than
 ///    [`MAX_EXPIRY_TIMESTAMP_MS`] (106 / 150)
-/// 4. **Activation**: exactly one of the two parent ids, plus a valid
-///    `order_linked_activation_fill_quantity` (145 / 146 / 147 / 148)
-/// 5. **OCO**: any OCO link is rejected (129)
+/// 4. **Activation**: exactly one of the two parent ids, a client id that is not
+///    empty, plus a valid `order_linked_activation_fill_quantity`
+///    (145 / 146 / 156 / 147 / 148)
+/// 5. **OCO**: one of the two partner ids (157), a client id that is not empty
+///    (158) and not the order's own (159); a partner earlier in the same
+///    transaction, on the same market, must be able to pair with it (160 to 164)
+/// 6. **Close on trigger**: only on a reduce-only order (151) that is not
+///    post-only, fill-or-kill or good-till-time (152 / 153 / 154)
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Conditional {
     /// Specifies the direction of the price condition that will trigger this order.
@@ -843,8 +917,10 @@ pub struct Conditional {
     ///
     /// # Constraints
     /// - Cannot be used with `order_linked_activation_order_id`
+    /// - Must not be empty (156)
     /// - Requires `order_linked_activation_fill_quantity` to be specified
-    /// - The referenced order must exist and be valid
+    /// - The referenced order must be a non-conditional order of the same account and
+    ///   market, live or submitted earlier in the same transaction
     ///
     /// # Use Cases
     /// - Bracket orders where stop-loss activates after entry order fills
@@ -862,7 +938,8 @@ pub struct Conditional {
     /// # Constraints
     /// - Cannot be used with `order_linked_activation_client_order_id`
     /// - Requires `order_linked_activation_fill_quantity` to be specified
-    /// - The referenced order must exist and be valid
+    /// - The referenced order must be a non-conditional order of the same account and
+    ///   market, live or submitted earlier in the same transaction
     #[serde(alias = "oloid")]
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -893,40 +970,69 @@ pub struct Conditional {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order_linked_activation_fill_quantity: Option<String>,
 
-    /// Client order ID for OCO (One-Cancels-Other) relationship.
+    /// Client order ID of the order this conditional pairs with one-cancels-other.
     ///
-    /// When specified, this conditional order will be linked in an OCO relationship
-    /// with the order identified by this client order ID. When either order executes,
-    /// the other will be automatically canceled.
+    /// This order is the second of the pair; the one it names is the first, and
+    /// names nothing. Whenever either triggers, is cancelled or expires, the
+    /// other is cancelled.
     ///
     /// # Constraints
-    /// - Cannot be used with `oco_order_link_order_id`
-    /// - The referenced order must exist
-    /// - Creates a bidirectional cancellation relationship
+    /// - Cannot be used with `oco_order_link_order_id` (157)
+    /// - Must not be empty (158), nor this order's own client order id (159)
+    /// - The referenced order must be a conditional of the same account and
+    ///   market still waiting to trigger, pending or dormant, in no pair yet, on
+    ///   the same side and with the opposite trigger condition; one submitted
+    ///   earlier in the same transaction counts
     ///
     /// # Use Cases
-    /// - Bracket orders with take-profit and stop-loss
-    /// - Either-or execution strategies
-    /// - Risk management with multiple exit strategies
+    /// - A take profit and a stop loss on the same position
     #[serde(alias = "ococid")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub oco_order_link_client_order_id: Option<String>,
 
-    /// System order ID for OCO (One-Cancels-Other) relationship.
+    /// Sequencer order ID of the order this conditional pairs with
+    /// one-cancels-other.
     ///
-    /// Alternative to `oco_order_link_client_order_id` for creating OCO relationships
-    /// using system-assigned order IDs instead of client order IDs.
+    /// Alternative to `oco_order_link_client_order_id`, naming the order by the
+    /// id the sequencer assigned it.
     ///
     /// # Constraints
-    /// - Cannot be used with `oco_order_link_client_order_id`
-    /// - The referenced order must exist
-    /// - Creates a bidirectional cancellation relationship
+    /// - Cannot be used with `oco_order_link_client_order_id` (157)
+    /// - The referenced order must be one `oco_order_link_client_order_id` could
+    ///   name, already submitted: an order earlier in the same transaction has no
+    ///   id to name it by yet
     #[serde(alias = "ocooid")]
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(deserialize_with = "deserialize_optional_u128_from_string_or_number")]
     #[serde(serialize_with = "serialize_optional_u128_as_string")]
     pub oco_order_link_order_id: Option<u128>,
+
+    /// Marks a reduce-only conditional as one that closes on trigger: once it
+    /// triggers, it cancels the account's other orders on the same market as far
+    /// as its margin needs.
+    ///
+    /// If the margin check refuses the triggered order because the account's
+    /// free margin is short, the account's other orders on the same market are
+    /// cancelled one at a time until it passes: first those on the side that
+    /// would grow the position, then those on the closing side, then reduce-only
+    /// ones, each group worst price first, then newest. Each is reported as
+    /// `Cancelled` with `CancelledForCloseOnTrigger`. Nothing is cancelled unless
+    /// that lets the order pass.
+    ///
+    /// Nothing else about the order changes: it trades, rests, and meets its
+    /// account's self-trade prevention like any other. A refusal that cancelling cannot
+    /// cure stands: a fill that would leave an isolated position underwater
+    /// (`WouldBankruptIsolatedPosition`), a shortfall no set of this market's
+    /// orders covers, and orders on other markets are never cancelled. Trading
+    /// modes, the maker shield and the trading band apply as usual.
+    ///
+    /// # Constraints
+    /// - The order must be reduce-only (151)
+    /// - It cannot be post-only (152), fill-or-kill (153) or good-till-time (154)
+    #[serde(alias = "cot")]
+    #[serde(default)]
+    pub close_on_trigger: bool,
 }
 
 /// Complete order submission request with support for all order types and advanced features.
@@ -1064,13 +1170,15 @@ pub struct Conditional {
 ///     .build()
 ///     .expect("Failed to build conditional");
 ///
-/// // no top-level quantity: the conditional carries the size
+/// // no top-level quantity: the conditional carries the size. reduce-only, so
+/// // a reduce-only market or the position cap cannot refuse it at trigger
 /// let order = SubmitOrderRequest::builder()
 ///     .market("0x123")
 ///     .account("0x123")
 ///     .sell()
 ///     .market_order()
 ///     .immediate_or_cancel()
+///     .reduce_only(true)
 ///     .conditional(stop_loss)
 ///     .build()
 ///     .expect("Failed to build order");
@@ -1142,13 +1250,13 @@ pub struct Conditional {
 pub struct SubmitOrderRequest {
     /// The market identifier where the order should be placed.
     ///
-    /// The market's on-chain object id: a `0x`-prefixed 256-bit hex string, not a
-    /// `BASEQUOTE` symbol. Anything that does not parse as hex resolves to the
-    /// zero id and is rejected as an unknown market (102).
+    /// The market's on-chain object id, spelt as a [`MarketId`] displays: `0x` and
+    /// 64 lower-case hex digits, not a `BASEQUOTE` symbol. Any other spelling, even
+    /// of the same id, is refused with `NonCanonicalMarketId` (503).
     ///
     /// # Validation
     /// - Cannot be empty
-    /// - Must parse as `0x`-prefixed hex ([`MarketId`])
+    /// - Must be `0x` and 64 lower-case hex digits
     /// - Must exist in the system
     /// - Must be currently active for trading
     ///
@@ -1169,12 +1277,11 @@ pub struct SubmitOrderRequest {
     ///
     /// # Validation
     /// - Cannot be empty
+    /// - Must be `0x` and 64 lower-case hex digits, as an [`AccountId`] displays;
+    ///   any other spelling, even of the same id, is refused with
+    ///   `NonCanonicalAccountId` (502)
     /// - Must be authorized to trade in the specified market
     /// - Must have sufficient balance/margin for the order
-    ///
-    /// # Format
-    /// Account identifiers are typically alphanumeric strings, but the exact
-    /// format depends on your system's account management.
     #[serde(alias = "sa")]
     #[serde(default)]
     pub account: Arc<str>,
@@ -1384,8 +1491,8 @@ pub struct SubmitOrderRequest {
     /// - Returned in order status and execution reports
     ///
     /// # Format
+    /// - Must not be empty (155)
     /// - Typically alphanumeric strings
-    /// - Maximum length depends on system configuration
     /// - Should be meaningful for client-side tracking
     ///
     /// # Use Cases
@@ -1419,9 +1526,10 @@ pub struct SubmitOrderRequest {
     /// - Time-based expiration with trigger or cancel actions
     /// - Quantity as a fraction `(0,1]` of the position, at trigger or at submission
     /// - Order-linked activation (dormant until a parent order fills)
+    /// - One-cancels-other pairs (a take profit and a stop loss)
     ///
-    /// Trailing-stop triggers (125) and OCO links (129) are reserved vocabulary
-    /// the sequencer rejects.
+    /// Trailing-stop triggers (125) are reserved vocabulary the sequencer
+    /// rejects.
     ///
     /// # Use Cases
     /// - **Stop-loss orders**: Automatically sell when price falls
@@ -1434,7 +1542,7 @@ pub struct SubmitOrderRequest {
     /// When conditional is specified, additional validation applies:
     /// - All conditional fields must be properly configured
     /// - Order linking relationships must be valid
-    /// - OCO relationships cannot create cycles
+    /// - OCO links pair two orders, never more: the order named names nothing
     /// - Quantity specifications must be compatible
     ///
     /// # Example
@@ -1522,8 +1630,10 @@ pub struct SubmitOrderRequest {
 ///     .unwrap();
 /// ```
 ///
-/// Conditional stop-loss order (a market order must be IOC or FOK, and a
-/// conditional order carries its size in the conditional):
+/// Conditional stop-loss order (a market order must be IOC or FOK, a
+/// conditional order carries its size in the conditional, and a closing order
+/// is reduce-only so a reduce-only market or the position cap cannot refuse it
+/// at trigger):
 /// ```rust
 /// use types::api::submit_order::{SubmitOrderRequestBuilder, Conditional, Trigger};
 ///
@@ -1541,6 +1651,7 @@ pub struct SubmitOrderRequest {
 ///     .sell()
 ///     .immediate_or_cancel()
 ///     .market_order()
+///     .reduce_only(true)
 ///     .conditional(stop_loss)
 ///     .build()
 ///     .unwrap();
@@ -1596,9 +1707,9 @@ impl SubmitOrderRequestBuilder {
     ///
     /// # Arguments
     ///
-    /// * `market` - the market's on-chain object id, `0x`-prefixed hex. A symbol
-    ///   such as `"BTC-USD"` makes [`build()`](Self::build) return
-    ///   `InvalidFieldValue`.
+    /// * `market` - the market's on-chain object id, `0x` and 64 lower-case hex
+    ///   digits; the sequencer refuses any other spelling. A symbol such as
+    ///   `"BTC-USD"` makes [`build()`](Self::build) return `InvalidFieldValue`.
     ///
     /// # Example
     ///
@@ -1619,7 +1730,8 @@ impl SubmitOrderRequestBuilder {
     ///
     /// # Arguments
     ///
-    /// * `account` - Account address (e.g., "0x123...")
+    /// * `account` - the account id, `0x` and 64 lower-case hex digits; the
+    ///   sequencer refuses any other spelling. An [`AccountId`] converts to it.
     ///
     /// # Example
     ///
@@ -1627,7 +1739,7 @@ impl SubmitOrderRequestBuilder {
     /// use types::api::submit_order::SubmitOrderRequestBuilder;
     ///
     /// let builder = SubmitOrderRequestBuilder::new()
-    ///     .account("0x1234567890abcdef");
+    ///     .account("0x00000000000000000000000000000000000000000000000000001234567890ab");
     /// ```
     pub fn account<S: Into<String>>(mut self, account: S) -> Self {
         self.account = Some(account.into());
@@ -2046,7 +2158,51 @@ impl SubmitOrderRequestBuilder {
             });
         }
 
+        // the sequencer refuses an empty client order id (error 155)
+        if self.client_order_id.as_deref() == Some("") {
+            return Err(SubmitOrderRequestBuilderError::InvalidConfiguration {
+                message: "client order id cannot be empty".to_string(),
+            });
+        }
+
+        // the sequencer refuses an OCO link naming the order itself (error 159)
+        let oco_client_id = self
+            .conditional
+            .as_ref()
+            .and_then(|c| c.oco_order_link_client_order_id.as_deref());
+        if oco_client_id.is_some() && oco_client_id == self.client_order_id.as_deref() {
+            return Err(SubmitOrderRequestBuilderError::InvalidConfiguration {
+                message: "an OCO link cannot name the order itself".to_string(),
+            });
+        }
+
+        if self
+            .conditional
+            .as_ref()
+            .is_some_and(|c| c.close_on_trigger)
+        {
+            self.validate_close_on_trigger()?;
+        }
+
         Ok(())
+    }
+
+    // the sequencer's close-on-trigger rules (errors 151 to 154)
+    fn validate_close_on_trigger(&self) -> Result<(), SubmitOrderRequestBuilderError> {
+        let message = if !self.reduce_only.unwrap_or_else(default_reduce_only) {
+            "close on trigger requires a reduce-only order"
+        } else if self.post_only.unwrap_or_else(default_post_only) {
+            "close on trigger is incompatible with post-only"
+        } else if self.tif == Some(TimeInForce::Fok) {
+            "close on trigger is incompatible with fill-or-kill"
+        } else if self.tif == Some(TimeInForce::Gtt) {
+            "close on trigger is incompatible with good-till-time"
+        } else {
+            return Ok(());
+        };
+        return Err(SubmitOrderRequestBuilderError::InvalidConfiguration {
+            message: message.to_string(),
+        });
     }
 
     /// Builds the `SubmitOrderRequest`, consuming the builder.
@@ -2064,6 +2220,10 @@ impl SubmitOrderRequestBuilder {
     /// - Market orders have a price specified
     /// - GTT orders are missing an expiry timestamp
     /// - Order type is Unspecified
+    /// - The client order id is the empty string
+    /// - The conditional's OCO link names the order's own client order id
+    /// - A close-on-trigger conditional rides on an order that is not reduce-only,
+    ///   or is post-only, fill-or-kill or good-till-time
     ///
     /// # Example
     ///
@@ -2530,8 +2690,8 @@ impl ConditionalExpiry {
 /// - Flexible quantity specifications
 /// - Optional expiry configuration
 ///
-/// It will also build a trailing-stop trigger or an OCO link, but the sequencer
-/// rejects both (125 and 129) — see [`Trigger`] and [`Conditional`].
+/// It will also build a trailing-stop trigger, but the sequencer rejects it
+/// (125) — see [`Trigger`].
 ///
 /// # Required Fields
 ///
@@ -2592,6 +2752,7 @@ pub struct ConditionalBuilder {
     order_linked_activation_fill_quantity: Option<String>,
     oco_order_link_client_order_id: Option<String>,
     oco_order_link_order_id: Option<u128>,
+    close_on_trigger: bool,
 }
 
 /// Errors that can occur when building a [`Conditional`] order.
@@ -2982,17 +3143,16 @@ impl ConditionalBuilder {
         self
     }
 
-    /// Links this order with another in an OCO (One-Cancels-Other) relationship.
-    ///
-    /// **Not supported.** A conditional carrying an OCO link is rejected by the
-    /// sequencer with `OcoOrdersNotSupported` (129); nothing cancels the other
-    /// leg. Submit the two legs independently and cancel the loser yourself.
+    /// Pairs this order one-cancels-other with the order of this client order
+    /// ID: whenever either triggers, is cancelled or expires, the other is
+    /// cancelled. See [`Conditional::oco_order_link_client_order_id`] for which
+    /// orders can be named.
     ///
     /// **Note**: Cannot be used with [`oco_link_order_id()`](Self::oco_link_order_id).
     ///
     /// # Arguments
     ///
-    /// * `client_order_id` - Client-assigned ID of the linked OCO order
+    /// * `client_order_id` - Client-assigned ID of the order to pair with
     ///
     /// # Example
     ///
@@ -3007,16 +3167,15 @@ impl ConditionalBuilder {
         self
     }
 
-    /// Links this order with another in an OCO relationship (by order ID).
-    ///
-    /// **Not supported.** A conditional carrying an OCO link is rejected by the
-    /// sequencer with `OcoOrdersNotSupported` (129).
+    /// Pairs this order one-cancels-other with the order of this sequencer order
+    /// ID. See [`Conditional::oco_order_link_order_id`] for which orders can be
+    /// named.
     ///
     /// **Note**: Cannot be used with [`oco_link_client_id()`](Self::oco_link_client_id).
     ///
     /// # Arguments
     ///
-    /// * `order_id` - Exchange-assigned ID of the linked OCO order
+    /// * `order_id` - Sequencer-assigned ID of the order to pair with
     ///
     /// # Example
     ///
@@ -3029,6 +3188,29 @@ impl ConditionalBuilder {
     pub fn oco_link_order_id(mut self, order_id: u128) -> Self {
         self.oco_order_link_order_id = Some(order_id);
         self
+    }
+
+    /// Marks the conditional as closing on trigger. The order carrying it must
+    /// be reduce-only, and neither post-only, fill-or-kill nor good-till-time.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use types::api::submit_order::{ConditionalBuilder, Trigger};
+    ///
+    /// let stop = ConditionalBuilder::new()
+    ///     .falls_below()
+    ///     .trigger(Trigger::price("45000.00"))
+    ///     .mark_price()
+    ///     .percentage_of_position_at_trigger("1.0")
+    ///     .close_on_trigger()
+    ///     .build()
+    ///     .expect("Failed to build conditional");
+    /// assert!(stop.close_on_trigger);
+    /// ```
+    pub fn close_on_trigger(mut self) -> Self {
+        self.close_on_trigger = true;
+        return self;
     }
 
     /// Builds the `Conditional` order, consuming the builder.
@@ -3044,7 +3226,9 @@ impl ConditionalBuilder {
     /// - Any required field is missing (trigger_condition, trigger, reference_price)
     /// - Order linking is used without fill quantity
     /// - Both OCO client ID and order ID are specified
+    /// - The OCO client ID is the empty string
     /// - Both activation client ID and order ID are specified
+    /// - The activation client ID is the empty string
     ///
     /// # Example
     ///
@@ -3102,6 +3286,20 @@ impl ConditionalBuilder {
             });
         }
 
+        // the sequencer refuses an empty parent client order id (error 156)
+        if self.order_linked_activation_client_order_id.as_deref() == Some("") {
+            return Err(ConditionalBuilderError::InvalidConfiguration {
+                message: "Order linked activation client ID cannot be empty".to_string(),
+            });
+        }
+
+        // the sequencer refuses an empty OCO client order id (error 158)
+        if self.oco_order_link_client_order_id.as_deref() == Some("") {
+            return Err(ConditionalBuilderError::InvalidConfiguration {
+                message: "OCO client order ID cannot be empty".to_string(),
+            });
+        }
+
         Ok(Conditional {
             trigger_condition,
             trigger,
@@ -3113,6 +3311,7 @@ impl ConditionalBuilder {
             order_linked_activation_fill_quantity: self.order_linked_activation_fill_quantity,
             oco_order_link_client_order_id: self.oco_order_link_client_order_id,
             oco_order_link_order_id: self.oco_order_link_order_id,
+            close_on_trigger: self.close_on_trigger,
         })
     }
 }
@@ -3212,6 +3411,7 @@ mod tests {
                 oco_order_link_client_order_id: Some(
                     "f8a1be05-0b2a-4901-8658-574a4c351884".to_string(),
                 ),
+                close_on_trigger: false,
             }),
             client_order_id: Some("0dd87ac7-6115-4672-933e-28700436e192".into()),
         };
@@ -3382,6 +3582,178 @@ mod tests {
             }
             _ => panic!("Expected invalid configuration error"),
         }
+    }
+
+    // ── close on trigger ──────────────────────────────────────────────────
+
+    /// a reduce-only sell stop that closes on trigger, without a time in force
+    fn close_on_trigger_builder() -> SubmitOrderRequestBuilder {
+        let stop = Conditional::builder()
+            .falls_below()
+            .trigger(Trigger::price("49000.00"))
+            .mark_price()
+            .percentage_of_position_at_trigger("1.0")
+            .close_on_trigger()
+            .build()
+            .expect("a close-on-trigger conditional builds");
+        return SubmitOrderRequest::builder()
+            .market(MARKET1_MARKET_ID)
+            .account(ACCOUNT_ID)
+            .sell()
+            .limit_order("48000.00")
+            .reduce_only(true)
+            .conditional(stop);
+    }
+
+    fn refusal(builder: SubmitOrderRequestBuilder) -> String {
+        return match builder.build() {
+            Err(SubmitOrderRequestBuilderError::InvalidConfiguration { message }) => message,
+            other => panic!("expected an invalid configuration, got {other:?}"),
+        };
+    }
+
+    #[test]
+    fn a_reduce_only_close_on_trigger_order_builds() {
+        let order = close_on_trigger_builder()
+            .good_till_cancel()
+            .build()
+            .expect("a reduce-only good-till-cancel close on trigger builds");
+
+        assert!(order.conditional.unwrap().close_on_trigger);
+    }
+
+    #[test]
+    fn the_builder_holds_close_on_trigger_to_the_sequencer_rules() {
+        assert_eq!(
+            refusal(
+                close_on_trigger_builder()
+                    .good_till_cancel()
+                    .reduce_only(false)
+            ),
+            "close on trigger requires a reduce-only order"
+        );
+        assert_eq!(
+            refusal(
+                close_on_trigger_builder()
+                    .good_till_cancel()
+                    .post_only(true)
+            ),
+            "close on trigger is incompatible with post-only"
+        );
+        assert_eq!(
+            refusal(close_on_trigger_builder().fill_or_kill()),
+            "close on trigger is incompatible with fill-or-kill"
+        );
+        assert_eq!(
+            refusal(close_on_trigger_builder().good_till_time(1747313713000)),
+            "close on trigger is incompatible with good-till-time"
+        );
+    }
+
+    // ── empty client order ids ────────────────────────────────────────────
+
+    #[test]
+    fn the_builder_refuses_an_empty_client_order_id() {
+        let builder = SubmitOrderRequest::builder()
+            .market(MARKET1_MARKET_ID)
+            .account(ACCOUNT_ID)
+            .buy()
+            .limit_order("50000.00")
+            .quantity("0.1")
+            .good_till_cancel()
+            .client_order_id("");
+
+        assert_eq!(refusal(builder), "client order id cannot be empty");
+    }
+
+    #[test]
+    fn the_conditional_builder_refuses_an_empty_activation_client_id() {
+        let result = Conditional::builder()
+            .falls_below()
+            .trigger(Trigger::price("49000.00"))
+            .mark_price()
+            .order_linked_activation_client_id("", "1.0")
+            .build();
+
+        match result {
+            Err(ConditionalBuilderError::InvalidConfiguration { message }) => {
+                assert_eq!(message, "Order linked activation client ID cannot be empty")
+            }
+            other => panic!("expected an invalid configuration, got {other:?}"),
+        }
+    }
+
+    // ── oco link ──────────────────────────────────────────────────────────
+
+    #[test]
+    fn the_conditional_builder_refuses_an_empty_oco_client_id() {
+        let result = Conditional::builder()
+            .falls_below()
+            .trigger(Trigger::price("49000.00"))
+            .mark_price()
+            .oco_link_client_id("")
+            .build();
+
+        match result {
+            Err(ConditionalBuilderError::InvalidConfiguration { message }) => {
+                assert_eq!(message, "OCO client order ID cannot be empty")
+            }
+            other => panic!("expected an invalid configuration, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn the_builder_refuses_an_oco_link_naming_the_order_itself() {
+        let stop = Conditional::builder()
+            .falls_below()
+            .trigger(Trigger::price("49000.00"))
+            .mark_price()
+            .absolute_quantity("0.1")
+            .oco_link_client_id("sl")
+            .build()
+            .expect("a stop naming its partner builds");
+        let builder = SubmitOrderRequest::builder()
+            .market(MARKET1_MARKET_ID)
+            .account(ACCOUNT_ID)
+            .sell()
+            .limit_order("48000.00")
+            .good_till_cancel()
+            .client_order_id("sl")
+            .conditional(stop);
+
+        assert_eq!(refusal(builder), "an OCO link cannot name the order itself");
+    }
+
+    #[test]
+    fn the_builder_accepts_an_oco_link_naming_another_order() {
+        let stop = Conditional::builder()
+            .falls_below()
+            .trigger(Trigger::price("49000.00"))
+            .mark_price()
+            .absolute_quantity("0.1")
+            .oco_link_client_id("tp")
+            .build()
+            .expect("a stop naming its partner builds");
+
+        let order = SubmitOrderRequest::builder()
+            .market(MARKET1_MARKET_ID)
+            .account(ACCOUNT_ID)
+            .sell()
+            .limit_order("48000.00")
+            .good_till_cancel()
+            .client_order_id("sl")
+            .conditional(stop)
+            .build()
+            .expect("an order naming another builds");
+
+        assert_eq!(
+            order
+                .conditional
+                .unwrap()
+                .oco_order_link_client_order_id
+                .as_deref(),
+            Some("tp")
+        );
     }
 
     #[test]

@@ -222,6 +222,9 @@ pub enum ErrorString {
     /// Both an order id and a client order id were supplied for a cancellation
     #[serde(rename = "cannot specify both order id and client order id")]
     ConflictingOrderIds,
+    /// A client order id was supplied as the empty string, which can name no order
+    #[serde(rename = "client order id cannot be empty")]
+    EmptyClientOrderId,
     /// New block command is restricted and cannot be executed
     #[serde(rename = "new block command is restricted")]
     NewBlockCommandIsRestricted,
@@ -288,6 +291,12 @@ pub enum ErrorString {
     /// The transaction sender is not authorized
     #[serde(rename = "sender not allowed")]
     SenderNotAllowed,
+    /// An account id is not `0x` followed by 64 lowercase hex digits
+    #[serde(rename = "account id not canonical")]
+    NonCanonicalAccountId,
+    /// A market id is not `0x` followed by 64 lowercase hex digits
+    #[serde(rename = "market id not canonical")]
+    NonCanonicalMarketId,
     /// Trailing stop triggers are not supported yet
     #[serde(rename = "trailing stop triggers not supported")]
     TrailingStopTriggersNotSupported,
@@ -306,15 +315,44 @@ pub enum ErrorString {
     /// A linked conditional did not reference any parent order
     #[serde(rename = "order link requires a parent order reference")]
     OrderLinkMissingParent,
+    /// A linked conditional named its parent by an empty client order id
+    #[serde(rename = "order link parent client order id cannot be empty")]
+    OrderLinkEmptyClientOrderId,
     /// A linked conditional did not specify a fill quantity threshold
     #[serde(rename = "order link requires a fill quantity threshold")]
     OrderLinkMissingFillQuantity,
     /// The order link fill quantity threshold was not a valid quantity
     #[serde(rename = "invalid order link fill quantity")]
     OrderLinkInvalidFillQuantity,
-    /// OCO (One-Cancels-Other) orders are not supported yet
+    /// Reserved: OCO links are supported and nothing emits this today
     #[serde(rename = "oco orders not supported")]
     OcoOrdersNotSupported,
+    /// An OCO link named its partner by both a client order id and an order id
+    #[serde(rename = "oco link must reference exactly one order")]
+    OcoBothIds,
+    /// An OCO link named its partner by an empty client order id
+    #[serde(rename = "oco link client order id cannot be empty")]
+    OcoEmptyClientOrderId,
+    /// An OCO link named the order's own client order id
+    #[serde(rename = "oco link cannot reference the order itself")]
+    OcoSelfReference,
+    /// An OCO link named an order submitted later in the same transaction
+    #[serde(rename = "oco link references an order later in the transaction")]
+    OcoPartnerLaterInTransaction,
+    /// An OCO link named an order of the same transaction that is not conditional
+    #[serde(rename = "oco link references an order that is not conditional")]
+    OcoPartnerNotConditional,
+    /// An OCO link named an order of the same transaction that carries a link of
+    /// its own, or that an earlier order already names
+    #[serde(rename = "oco link references an order already linked")]
+    OcoPartnerAlreadyLinked,
+    /// An OCO link named an order of the same transaction on the other side
+    #[serde(rename = "oco link references an order on the other side")]
+    OcoPartnerSideMismatch,
+    /// An OCO link named an order of the same transaction with the same trigger
+    /// condition
+    #[serde(rename = "oco link references an order with the same trigger condition")]
+    OcoPartnerTriggerConditionMismatch,
     /// Invalid trigger price format
     #[serde(rename = "invalid trigger price")]
     InvalidTriggerPrice,
@@ -336,6 +374,19 @@ pub enum ErrorString {
     /// Conditional orders must have a quantity specified
     #[serde(rename = "conditional order must have quantity")]
     ConditionalOrderMustHaveQuantity,
+    /// A close-on-trigger conditional must be a reduce-only order
+    #[serde(rename = "close on trigger requires reduce only")]
+    CloseOnTriggerRequiresReduceOnly,
+    /// A close-on-trigger conditional cannot be post-only: it must trade when it triggers
+    #[serde(rename = "close on trigger is incompatible with post only")]
+    CloseOnTriggerIncompatibleWithPostOnly,
+    /// A close-on-trigger conditional cannot be fill-or-kill
+    #[serde(rename = "close on trigger is incompatible with fill or kill")]
+    CloseOnTriggerIncompatibleWithFillOrKill,
+    /// A close-on-trigger conditional cannot be good-till-time: its expiry would
+    /// lapse while it waits for its trigger
+    #[serde(rename = "close on trigger is incompatible with good till time")]
+    CloseOnTriggerIncompatibleWithGoodTillTime,
     /// Trigger price exceeds the allowed decimal precision
     #[serde(rename = "trigger price has too many decimal places")]
     TriggerPriceHasTooManyDecimalPlaces,
@@ -354,6 +405,9 @@ pub enum ErrorString {
     /// Margin-parameter commands must be alone in the transaction
     #[serde(rename = "transaction must contain exactly one command for margin parameter changes")]
     BatchOfOneRequired,
+    /// The transaction carries more commands than one transaction may
+    #[serde(rename = "transaction carries too many commands")]
+    TooManyCommands,
     /// IMR value is below the market's minimum IMR
     #[serde(rename = "imr below market minimum")]
     ImrBelowMarketMinimum,
@@ -618,7 +672,8 @@ pub const ERROR_CONDITIONAL_ORDER_LINKED_ACTIVATION_NOT_SUPPORTED: Error = Error
     details: None,
 };
 
-/// Error 129: OCO (One-Cancels-Other) orders are not supported yet
+/// Error 129: reserved. OCO links are supported today and nothing emits this
+/// code; it stays as wire vocabulary for a deployment that disables the feature.
 pub const ERROR_CONDITIONAL_OCO_NOT_SUPPORTED: Error = Error {
     error_code: 129,
     error_string: ErrorString::OcoOrdersNotSupported,
@@ -773,6 +828,109 @@ pub const ERROR_SUBMIT_ORDER_EXPIRY_TIMESTAMP_TOO_FAR_IN_FUTURE: Error = Error {
     details: None,
 };
 
+/// Error 151: a close-on-trigger conditional is not reduce-only
+pub const ERROR_CONDITIONAL_CLOSE_ON_TRIGGER_REQUIRES_REDUCE_ONLY: Error = Error {
+    error_code: 151,
+    error_string: ErrorString::CloseOnTriggerRequiresReduceOnly,
+    details: None,
+};
+
+/// Error 152: a close-on-trigger conditional is post-only
+pub const ERROR_CONDITIONAL_CLOSE_ON_TRIGGER_INCOMPATIBLE_WITH_POST_ONLY: Error = Error {
+    error_code: 152,
+    error_string: ErrorString::CloseOnTriggerIncompatibleWithPostOnly,
+    details: None,
+};
+
+/// Error 153: a close-on-trigger conditional is fill-or-kill
+pub const ERROR_CONDITIONAL_CLOSE_ON_TRIGGER_INCOMPATIBLE_WITH_FILL_OR_KILL: Error = Error {
+    error_code: 153,
+    error_string: ErrorString::CloseOnTriggerIncompatibleWithFillOrKill,
+    details: None,
+};
+
+/// Error 154: a close-on-trigger conditional is good-till-time
+pub const ERROR_CONDITIONAL_CLOSE_ON_TRIGGER_INCOMPATIBLE_WITH_GOOD_TILL_TIME: Error = Error {
+    error_code: 154,
+    error_string: ErrorString::CloseOnTriggerIncompatibleWithGoodTillTime,
+    details: None,
+};
+
+/// Error 155: the order's client order id is the empty string
+pub const ERROR_SUBMIT_ORDER_EMPTY_CLIENT_ORDER_ID: Error = Error {
+    error_code: 155,
+    error_string: ErrorString::EmptyClientOrderId,
+    details: None,
+};
+
+/// Error 156: a linked conditional names its parent by an empty client order id
+pub const ERROR_CONDITIONAL_ORDER_LINK_EMPTY_CLIENT_ORDER_ID: Error = Error {
+    error_code: 156,
+    error_string: ErrorString::OrderLinkEmptyClientOrderId,
+    details: None,
+};
+
+/// Error 157: an OCO link names its partner by both a client order id and an
+/// order id
+pub const ERROR_CONDITIONAL_OCO_BOTH_IDS: Error = Error {
+    error_code: 157,
+    error_string: ErrorString::OcoBothIds,
+    details: None,
+};
+
+/// Error 158: an OCO link names its partner by an empty client order id
+pub const ERROR_CONDITIONAL_OCO_EMPTY_CLIENT_ORDER_ID: Error = Error {
+    error_code: 158,
+    error_string: ErrorString::OcoEmptyClientOrderId,
+    details: None,
+};
+
+/// Error 159: an OCO link names the order's own client order id
+pub const ERROR_CONDITIONAL_OCO_SELF_REFERENCE: Error = Error {
+    error_code: 159,
+    error_string: ErrorString::OcoSelfReference,
+    details: None,
+};
+
+/// Error 160: an OCO link names an order submitted later in the same transaction
+pub const ERROR_CONDITIONAL_OCO_PARTNER_LATER_IN_TRANSACTION: Error = Error {
+    error_code: 160,
+    error_string: ErrorString::OcoPartnerLaterInTransaction,
+    details: None,
+};
+
+/// Error 161: an OCO link names an order of the same transaction that is not
+/// conditional
+pub const ERROR_CONDITIONAL_OCO_PARTNER_NOT_CONDITIONAL: Error = Error {
+    error_code: 161,
+    error_string: ErrorString::OcoPartnerNotConditional,
+    details: None,
+};
+
+/// Error 162: an OCO link names an order of the same transaction that carries a
+/// link of its own, or that an earlier order already names
+pub const ERROR_CONDITIONAL_OCO_PARTNER_ALREADY_LINKED: Error = Error {
+    error_code: 162,
+    error_string: ErrorString::OcoPartnerAlreadyLinked,
+    details: None,
+};
+
+/// Error 163: an OCO link names an order of the same transaction on the other
+/// side
+pub const ERROR_CONDITIONAL_OCO_PARTNER_SIDE_MISMATCH: Error = Error {
+    error_code: 163,
+    error_string: ErrorString::OcoPartnerSideMismatch,
+    details: None,
+};
+
+/// Error 164: an OCO link names an order of the same transaction with the same
+/// trigger condition
+pub const ERROR_CONDITIONAL_OCO_PARTNER_TRIGGER_CONDITION_MISMATCH: Error = Error {
+    error_code: 164,
+    error_string: ErrorString::OcoPartnerTriggerConditionMismatch,
+    details: None,
+};
+
 // Order Cancellation Errors (200-299)
 
 /// Error 201: Order cancellation submitted without specifying a market identifier
@@ -800,6 +958,13 @@ pub const ERROR_CANCEL_ORDER_MISSING_ACCOUNT: Error = Error {
 pub const ERROR_CANCEL_ORDER_CONFLICTING_IDS: Error = Error {
     error_code: 204,
     error_string: ErrorString::ConflictingOrderIds,
+    details: None,
+};
+
+/// Error 205: order cancellation names the order by an empty client order id
+pub const ERROR_CANCEL_ORDER_EMPTY_CLIENT_ORDER_ID: Error = Error {
+    error_code: 205,
+    error_string: ErrorString::EmptyClientOrderId,
     details: None,
 };
 
@@ -915,12 +1080,37 @@ pub const ERROR_BATCH_OF_ONE_REQUIRED: Error = Error {
     details: None,
 };
 
+/// Error 431: the transaction carries more than `MAX_TRANSACTION_COMMANDS` commands
+pub const ERROR_TOO_MANY_COMMANDS: Error = Error {
+    error_code: 431,
+    error_string: ErrorString::TooManyCommands,
+    details: None,
+};
+
 // Authentication/Authorization Errors (500-599)
 
 /// Error 501: The transaction sender is not authorized to perform this operation
 pub const ERROR_SENDER_NOT_ALLOWED: Error = Error {
     error_code: 501,
     error_string: ErrorString::SenderNotAllowed,
+    details: None,
+};
+
+/// Error 502: An account id in a command is not `0x` followed by 64 lowercase hex
+/// digits. The parsed id would name the same account, so only the canonical text
+/// is admitted: the engine keeps the text a client sent and emits it.
+pub const ERROR_NON_CANONICAL_ACCOUNT_ID: Error = Error {
+    error_code: 502,
+    error_string: ErrorString::NonCanonicalAccountId,
+    details: None,
+};
+
+/// Error 503: A market id in a command is not `0x` followed by 64 lowercase hex
+/// digits. The parsed id would name the same market, so only the canonical text
+/// is admitted: the engine keeps the text a client sent and emits it.
+pub const ERROR_NON_CANONICAL_MARKET_ID: Error = Error {
+    error_code: 503,
+    error_string: ErrorString::NonCanonicalMarketId,
     details: None,
 };
 
