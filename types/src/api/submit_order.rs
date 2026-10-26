@@ -29,8 +29,8 @@
 //! use types::api::submit_order::SubmitOrderRequest;
 //!
 //! let order = SubmitOrderRequest::builder()
-//!     .market("0x123")
-//!     .account("0x123")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
 //!     .buy()
 //!     .limit_order("50000.00")
 //!     .quantity("0.1")
@@ -44,8 +44,8 @@
 //! use types::api::submit_order::SubmitOrderRequest;
 //!
 //! let order = SubmitOrderRequest::builder()
-//!     .market("0x456")
-//!     .account("0x456")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000456")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
 //!     .sell()
 //!     .market_order()
 //!     .quantity("1.0")
@@ -73,8 +73,8 @@
 //! // whenever the market is reduce-only or the position is at the market's
 //! // position cap, which is when a stop is most likely to fire
 //! let order = SubmitOrderRequest::builder()
-//!     .market("0x789")
-//!     .account("0x789")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000789")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000789")
 //!     .sell()
 //!     .market_order()
 //!     .immediate_or_cancel()
@@ -89,8 +89,8 @@
 //! use types::api::submit_order::SubmitOrderRequest;
 //!
 //! let order = SubmitOrderRequest::builder()
-//!     .market("0x123")
-//!     .account("0x123")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
 //!     .buy()
 //!     .limit_order("0.50")
 //!     .quantity("0.25")
@@ -106,8 +106,8 @@
 //! use types::api::submit_order::SubmitOrderRequest;
 //!
 //! let order = SubmitOrderRequest::builder()
-//!     .market("0x456")
-//!     .account("0x456")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000456")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
 //!     .sell()
 //!     .limit_order("1.00")
 //!     .quantity("100")
@@ -136,8 +136,8 @@
 //! use types::api::submit_order::{Conditional, SubmitOrderRequest, Trigger};
 //!
 //! let take_profit = SubmitOrderRequest::builder()
-//!     .market("0x789")
-//!     .account("0x789")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000789")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000789")
 //!     .sell()
 //!     .limit_order("55000.00")
 //!     .good_till_cancel()
@@ -156,8 +156,8 @@
 //!     .expect("Failed to build order");
 //!
 //! let stop_loss = SubmitOrderRequest::builder()
-//!     .market("0x789")
-//!     .account("0x789")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000789")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000789")
 //!     .sell()
 //!     .market_order()
 //!     .immediate_or_cancel()
@@ -190,8 +190,8 @@
 //!     .expect("Failed to build conditional");
 //!
 //! let order = SubmitOrderRequest::builder()
-//!     .market("0x789")
-//!     .account("0x789")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000789")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000789")
 //!     .buy()
 //!     .limit_order("0.75")
 //!     .good_till_cancel()
@@ -947,25 +947,30 @@ pub struct Conditional {
     #[serde(serialize_with = "serialize_optional_u128_as_string")]
     pub order_linked_activation_order_id: Option<u128>,
 
-    /// Minimum fill quantity threshold for parent order activation.
+    /// Parent fill quantity at which this conditional arms.
     ///
-    /// Specifies how much of the parent order must be filled before this
-    /// conditional order becomes active. This allows for sophisticated
-    /// parent-child order relationships with fine-grained control.
+    /// While the parent is live, this conditional stays dormant until the
+    /// parent's filled quantity reaches this threshold. When the parent ends
+    /// (cancelled, expired, or any other way off the book):
+    /// - having filled anything, even less than the threshold, this conditional
+    ///   arms, since the fill left a position for it to protect;
+    /// - having filled nothing, this conditional is cancelled.
+    ///
+    /// A parent closed by a liquidation cancels this conditional without arming
+    /// it.
     ///
     /// # Required When
     /// - Either `order_linked_activation_client_order_id` or
     ///   `order_linked_activation_order_id` is specified
     ///
     /// # Format
-    /// - Must be a positive decimal string
-    /// - Should be less than or equal to parent order's total quantity
-    /// - Precision should match market requirements
+    /// - Must be a positive decimal string, valid for the market's lot size
+    /// - Should be less than or equal to the parent order's total quantity
     ///
     /// # Examples
-    /// - `"0.5"`: Activate when parent order has 0.5 units filled
-    /// - `"100"`: Activate when parent order has 100 units filled
-    /// - `"0.0001"`: Activate immediately on any parent order fill
+    /// - `"0.5"`: arm once the parent has 0.5 units filled
+    /// - `"100"`: arm once the parent has 100 units filled
+    /// - the market's lot size: arm on the parent's first fill
     #[serde(alias = "olq")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub order_linked_activation_fill_quantity: Option<String>,
@@ -1094,10 +1099,14 @@ pub struct Conditional {
 /// use types::core::{AccountId, MarketId};
 ///
 /// let order = SubmitOrderRequest {
-///     market: "0x123".into(),
-///     market_id: MarketId::from("0x123"),
-///     account: "0x123".into(),
-///     account_id: AccountId::from("0x123"),
+///     market: "0x0000000000000000000000000000000000000000000000000000000000000123".into(),
+///     market_id: MarketId::from(
+///         "0x0000000000000000000000000000000000000000000000000000000000000123",
+///     ),
+///     account: "0x0000000000000000000000000000000000000000000000000000000000000123".into(),
+///     account_id: AccountId::from(
+///         "0x0000000000000000000000000000000000000000000000000000000000000123",
+///     ),
 ///     side: Side::Buy,
 ///     tif: TimeInForce::Gtc,
 ///     order_type: OrderType::Limit,
@@ -1116,8 +1125,8 @@ pub struct Conditional {
 /// use types::api::submit_order::SubmitOrderRequest;
 ///
 /// let order = SubmitOrderRequest::builder()
-///     .market("0x123")
-///     .account("0x123")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
 ///     .buy()
 ///     .limit_order("50000.00")
 ///     .quantity("0.1")
@@ -1131,8 +1140,8 @@ pub struct Conditional {
 /// use types::api::submit_order::SubmitOrderRequest;
 ///
 /// let order = SubmitOrderRequest::builder()
-///     .market("0x456")
-///     .account("0x456")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000456")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
 ///     .sell()
 ///     .market_order()
 ///     .quantity("2.0")
@@ -1146,8 +1155,8 @@ pub struct Conditional {
 /// use types::api::submit_order::SubmitOrderRequest;
 ///
 /// let order = SubmitOrderRequest::builder()
-///     .market("0x789")
-///     .account("0x789")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000789")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000789")
 ///     .buy()
 ///     .limit_order("0.00001234")
 ///     .quantity("100000")
@@ -1173,8 +1182,8 @@ pub struct Conditional {
 /// // no top-level quantity: the conditional carries the size. reduce-only, so
 /// // a reduce-only market or the position cap cannot refuse it at trigger
 /// let order = SubmitOrderRequest::builder()
-///     .market("0x123")
-///     .account("0x123")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
 ///     .sell()
 ///     .market_order()
 ///     .immediate_or_cancel()
@@ -1588,8 +1597,8 @@ pub struct SubmitOrderRequest {
 /// use types::api::submit_order::SubmitOrderRequestBuilder;
 ///
 /// let order = SubmitOrderRequestBuilder::new()
-///     .market("0x123")
-///     .account("0x123")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
 ///     .buy()
 ///     .good_till_cancel()
 ///     .limit_order("50000.00")
@@ -1603,8 +1612,8 @@ pub struct SubmitOrderRequest {
 /// use types::api::submit_order::SubmitOrderRequestBuilder;
 ///
 /// let order = SubmitOrderRequestBuilder::new()
-///     .market("0x456")
-///     .account("0x456")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000456")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
 ///     .sell()
 ///     .immediate_or_cancel()
 ///     .market_order()
@@ -1618,8 +1627,8 @@ pub struct SubmitOrderRequest {
 /// use types::api::submit_order::SubmitOrderRequestBuilder;
 ///
 /// let order = SubmitOrderRequestBuilder::new()
-///     .market("0x789")
-///     .account("0x789")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000789")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000789")
 ///     .buy()
 ///     .good_till_time(1747313713)
 ///     .limit_order("48000.00")
@@ -1646,8 +1655,8 @@ pub struct SubmitOrderRequest {
 ///     .unwrap();
 ///
 /// let order = SubmitOrderRequestBuilder::new()
-///     .market("0xabc")
-///     .account("0xabc")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000abc")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000abc")
 ///     .sell()
 ///     .immediate_or_cancel()
 ///     .market_order()
@@ -2231,8 +2240,8 @@ impl SubmitOrderRequestBuilder {
     /// use types::api::submit_order::SubmitOrderRequestBuilder;
     ///
     /// let order = SubmitOrderRequestBuilder::new()
-    ///     .market("0x123")
-    ///     .account("0x123")
+    ///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+    ///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
     ///     .buy()
     ///     .good_till_cancel()
     ///     .limit_order("50000.00")

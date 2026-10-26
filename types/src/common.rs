@@ -690,6 +690,17 @@ pub enum OrderError {
     /// - submit an order that reduces the position
     /// - set the position's IMR to at least the market's (`set_imr`)
     ImrBelowMarketReduceOnly,
+
+    /// conditional rejected: the account already holds the most conditionals a
+    /// market allows it, 10.
+    ///
+    /// every conditional the account has on the market counts, whether waiting to
+    /// trigger or dormant behind a parent order, so a bracket of a take-profit and
+    /// a stop-loss counts as two.
+    ///
+    /// # Resolution
+    /// - cancel a conditional the account no longer needs on that market
+    TooManyConditionals,
 }
 
 /// Reasons why a sequenced margin-parameter command (`switch_to_cross`,
@@ -2067,11 +2078,13 @@ pub enum ReferencePrice {
     /// Uses the price of the most recent trade execution.
     ///
     /// This price reflects actual market transactions and provides the most
-    /// immediate price information. However, it can be volatile and potentially
-    /// subject to manipulation, especially in low-volume markets.
+    /// immediate price information. Any trade sets it, so on a thin book a single
+    /// print can fire stops anywhere inside the market's trading band around the
+    /// mark price. Prefer [`ReferencePrice::Mark`] for protective stops, and give a
+    /// triggered order a limit price.
     ///
     /// # Best For
-    /// - Traditional stop-loss orders on spot markets
+    /// - Entries and take-profits that should react to actual trading
     /// - High-volume, liquid markets
     /// - When immediate price reaction is desired
     #[default]

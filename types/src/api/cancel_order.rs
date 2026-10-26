@@ -19,8 +19,8 @@
 //! use types::api::cancel_order::CancelOrderRequest;
 //!
 //! let request = CancelOrderRequest::builder()
-//!     .market("0x123")
-//!     .account("0x123")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
 //!     .order_id(12345678901234567890u128)
 //!     .build()
 //!     .expect("Failed to build cancel order request");
@@ -31,8 +31,8 @@
 //! use types::api::cancel_order::CancelOrderRequest;
 //!
 //! let request = CancelOrderRequest::builder()
-//!     .market("0x456")
-//!     .account("0x456")
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000456")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
 //!     .build()
 //!     .expect("Failed to build cancel order request");
 //! ```
@@ -421,8 +421,8 @@ where
 /// use types::api::cancel_order::CancelOrderRequest;
 ///
 /// let request = CancelOrderRequest::builder()
-///     .market("0x123")
-///     .account("0x123")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
 ///     .order_id(12345678901234567890u128)
 ///     .build()
 ///     .expect("Failed to build cancel order request");
@@ -433,8 +433,8 @@ where
 /// use types::api::cancel_order::CancelOrderRequest;
 ///
 /// let request = CancelOrderRequest::builder()
-///     .market("0x456")
-///     .account("0x456")
+///     .market("0x0000000000000000000000000000000000000000000000000000000000000456")
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
 ///     .build()
 ///     .expect("Failed to build cancel order request");
 /// ```
@@ -481,7 +481,8 @@ impl CancelOrderRequestBuilder {
     ///
     /// # Arguments
     ///
-    /// * `market` - Any value that can be converted to a String (market identifier)
+    /// * `market` - the market's on-chain object id, `0x` and 64 lower-case hex digits; the
+    ///   sequencer refuses any other spelling, which [`build()`](Self::build) does not catch.
     ///
     /// # Examples
     ///
@@ -502,7 +503,8 @@ impl CancelOrderRequestBuilder {
     ///
     /// # Arguments
     ///
-    /// * `account` - Any value that can be converted to a String (account identifier)
+    /// * `account` - the account id, `0x` and 64 lower-case hex digits; the sequencer refuses
+    ///   any other spelling, which [`build()`](Self::build) does not catch.
     ///
     /// # Examples
     ///
@@ -510,7 +512,7 @@ impl CancelOrderRequestBuilder {
     /// use types::api::cancel_order::CancelOrderRequest;
     ///
     /// let builder = CancelOrderRequest::builder()
-    ///     .account("0x123");
+    ///     .account("0x0000000000000000000000000000000000000000000000000000000000000123");
     /// ```
     pub fn account<S: Into<String>>(mut self, account: S) -> Self {
         self.account = Some(account.into());
@@ -577,14 +579,14 @@ impl CancelOrderRequestBuilder {
     ///
     /// // Successful build
     /// let request = CancelOrderRequest::builder()
-    ///     .market("0x123")
-    ///     .account("0x123")
+    ///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+    ///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
     ///     .build()
     ///     .expect("Failed to build request");
     ///
     /// // Build error - missing required field
     /// let result = CancelOrderRequest::builder()
-    ///     .market("0x123")
+    ///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
     ///     // Missing account field
     ///     .build();
     /// assert!(result.is_err());
@@ -647,8 +649,8 @@ impl CancelOrderRequest {
     /// use types::api::cancel_order::CancelOrderRequest;
     ///
     /// let request = CancelOrderRequest::builder()
-    ///     .market("0x123")
-    ///     .account("0x123")
+    ///     .market("0x0000000000000000000000000000000000000000000000000000000000000123")
+    ///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
     ///     .order_id(12345678901234567890u128)
     ///     .build()
     ///     .expect("Failed to build cancel order request");

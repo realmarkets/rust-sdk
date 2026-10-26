@@ -225,6 +225,9 @@ pub enum ErrorString {
     /// A client order id was supplied as the empty string, which can name no order
     #[serde(rename = "client order id cannot be empty")]
     EmptyClientOrderId,
+    /// A client order id was longer than `MAX_CLIENT_ID_BYTES`
+    #[serde(rename = "client order id too long")]
+    ClientOrderIdTooLong,
     /// New block command is restricted and cannot be executed
     #[serde(rename = "new block command is restricted")]
     NewBlockCommandIsRestricted,
@@ -318,6 +321,10 @@ pub enum ErrorString {
     /// A linked conditional named its parent by an empty client order id
     #[serde(rename = "order link parent client order id cannot be empty")]
     OrderLinkEmptyClientOrderId,
+    /// A linked conditional named its parent by a client order id longer than
+    /// `MAX_CLIENT_ID_BYTES`
+    #[serde(rename = "order link parent client order id too long")]
+    OrderLinkClientOrderIdTooLong,
     /// A linked conditional did not specify a fill quantity threshold
     #[serde(rename = "order link requires a fill quantity threshold")]
     OrderLinkMissingFillQuantity,
@@ -333,6 +340,10 @@ pub enum ErrorString {
     /// An OCO link named its partner by an empty client order id
     #[serde(rename = "oco link client order id cannot be empty")]
     OcoEmptyClientOrderId,
+    /// An OCO link named its partner by a client order id longer than
+    /// `MAX_CLIENT_ID_BYTES`
+    #[serde(rename = "oco link client order id too long")]
+    OcoClientOrderIdTooLong,
     /// An OCO link named the order's own client order id
     #[serde(rename = "oco link cannot reference the order itself")]
     OcoSelfReference,
@@ -408,6 +419,12 @@ pub enum ErrorString {
     /// The transaction carries more commands than one transaction may
     #[serde(rename = "transaction carries too many commands")]
     TooManyCommands,
+    /// The transaction's client request id was longer than `MAX_CLIENT_ID_BYTES`
+    #[serde(rename = "client request id too long")]
+    ClientRequestIdTooLong,
+    /// The transaction carries no commands
+    #[serde(rename = "transaction carries no commands")]
+    NoCommands,
     /// IMR value is below the market's minimum IMR
     #[serde(rename = "imr below market minimum")]
     ImrBelowMarketMinimum,
@@ -931,6 +948,29 @@ pub const ERROR_CONDITIONAL_OCO_PARTNER_TRIGGER_CONDITION_MISMATCH: Error = Erro
     details: None,
 };
 
+/// Error 165: the order's client order id is longer than `MAX_CLIENT_ID_BYTES`
+pub const ERROR_SUBMIT_ORDER_CLIENT_ORDER_ID_TOO_LONG: Error = Error {
+    error_code: 165,
+    error_string: ErrorString::ClientOrderIdTooLong,
+    details: None,
+};
+
+/// Error 166: a linked conditional names its parent by a client order id longer
+/// than `MAX_CLIENT_ID_BYTES`
+pub const ERROR_CONDITIONAL_ORDER_LINK_CLIENT_ORDER_ID_TOO_LONG: Error = Error {
+    error_code: 166,
+    error_string: ErrorString::OrderLinkClientOrderIdTooLong,
+    details: None,
+};
+
+/// Error 167: an OCO link names its partner by a client order id longer than
+/// `MAX_CLIENT_ID_BYTES`
+pub const ERROR_CONDITIONAL_OCO_CLIENT_ORDER_ID_TOO_LONG: Error = Error {
+    error_code: 167,
+    error_string: ErrorString::OcoClientOrderIdTooLong,
+    details: None,
+};
+
 // Order Cancellation Errors (200-299)
 
 /// Error 201: Order cancellation submitted without specifying a market identifier
@@ -965,6 +1005,14 @@ pub const ERROR_CANCEL_ORDER_CONFLICTING_IDS: Error = Error {
 pub const ERROR_CANCEL_ORDER_EMPTY_CLIENT_ORDER_ID: Error = Error {
     error_code: 205,
     error_string: ErrorString::EmptyClientOrderId,
+    details: None,
+};
+
+/// Error 206: order cancellation names the order by a client order id longer than
+/// `MAX_CLIENT_ID_BYTES`
+pub const ERROR_CANCEL_ORDER_CLIENT_ORDER_ID_TOO_LONG: Error = Error {
+    error_code: 206,
+    error_string: ErrorString::ClientOrderIdTooLong,
     details: None,
 };
 
@@ -1084,6 +1132,21 @@ pub const ERROR_BATCH_OF_ONE_REQUIRED: Error = Error {
 pub const ERROR_TOO_MANY_COMMANDS: Error = Error {
     error_code: 431,
     error_string: ErrorString::TooManyCommands,
+    details: None,
+};
+
+/// Error 432: the transaction's client request id is longer than
+/// `MAX_CLIENT_ID_BYTES`
+pub const ERROR_CLIENT_REQUEST_ID_TOO_LONG: Error = Error {
+    error_code: 432,
+    error_string: ErrorString::ClientRequestIdTooLong,
+    details: None,
+};
+
+/// Error 433: the transaction carries no commands
+pub const ERROR_NO_COMMANDS: Error = Error {
+    error_code: 433,
+    error_string: ErrorString::NoCommands,
     details: None,
 };
 

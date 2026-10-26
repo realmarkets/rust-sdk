@@ -31,7 +31,17 @@
 //! - `to_writer`/`to_writer_pretty` under sonic require sonic's `WriteExt`
 //!   (implemented for `Vec<u8>` and friends), not arbitrary `io::Write` —
 //!   for a plain writer, use `to_vec` + `write_all` instead.
+//!
+//! Untrusted input — what a client sends — goes through
+//! [`check_untrusted_nesting`] first; it only scans under `sonic` (see
+//! [`nesting`]).
 
+pub mod nesting;
+
+pub use nesting::{
+    MAX_UNTRUSTED_NESTING, NestingTooDeep, UNTRUSTED_NESTING_CHECKED, check_nesting,
+    check_untrusted_nesting,
+};
 #[cfg(not(feature = "sonic"))]
 pub use serde_json::{
     Error, Result, Value, from_slice, from_str, from_value, json, to_string, to_string_pretty,
