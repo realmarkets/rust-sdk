@@ -34,8 +34,8 @@
 //!     .chain_id("real-1")
 //!     .command(Command::CancelOrder(
 //!         CancelOrderRequest::builder()
-//!             .account("0x123")
-//!             .market("0x123")
+//!             .account("0x0000000000000000000000000000000000000000000000000000000000000123")
+//!             .market("0x0000000000000000000000000000000000000000000000000000000000000123")
 //!             .build()
 //!             .expect("Failed to build cancel order")
 //!     ))
@@ -99,8 +99,8 @@ use crate::core::{AccountId, MarketId};
 ///
 /// let command = Command::SubmitOrder(
 ///     SubmitOrderRequest::builder()
-///         .account("0x123")
-///         .market("0x123")
+///         .account("0x0000000000000000000000000000000000000000000000000000000000000123")
+///         .market("0x0000000000000000000000000000000000000000000000000000000000000123")
 ///         .buy()
 ///         .limit_order("50000.00")
 ///         .quantity("0.1")
@@ -238,8 +238,8 @@ impl Command {
 ///     .chain_id("real-1")
 ///     .command(Command::CancelOrder(
 ///         CancelOrderRequest::builder()
-///             .account("0x123")
-///             .market("0x123")
+///             .account("0x0000000000000000000000000000000000000000000000000000000000000123")
+///             .market("0x0000000000000000000000000000000000000000000000000000000000000123")
 ///             .build()
 ///             .expect("Failed to build cancel order")
 ///     ))
@@ -261,6 +261,17 @@ pub struct TransactionPayload {
     pub chain_id: String,
     pub commands: Vec<Command>,
 }
+
+/// The most commands one transaction may carry. The sequencer refuses a
+/// payload with more as a whole, with `TooManyCommands` (431).
+pub const MAX_TRANSACTION_COMMANDS: usize = 1_000;
+
+/// The longest a client-chosen id may be, in bytes: an order's
+/// `client_order_id`, the client order ids a conditional's links name, a
+/// cancellation's `client_order_id`, and the envelope's `client_request_id`.
+/// Each is kept with the order or the transaction, so the sequencer refuses a
+/// longer one rather than store it.
+pub const MAX_CLIENT_ID_BYTES: usize = 128;
 
 /// Builder for constructing `TransactionPayload` instances.
 ///
@@ -298,6 +309,11 @@ pub enum TransactionPayloadBuilderError {
     /// - `commands`: At least one command must be provided
     #[error("Missing required field: {field}")]
     MissingField { field: &'static str },
+
+    /// The payload carries more than [`MAX_TRANSACTION_COMMANDS`] commands, which
+    /// the sequencer refuses with `TooManyCommands` (431).
+    #[error("Too many commands: {count}, at most {max}", max = MAX_TRANSACTION_COMMANDS)]
+    TooManyCommands { count: usize },
 }
 
 impl TransactionPayloadBuilder {
@@ -404,8 +420,8 @@ impl TransactionPayloadBuilder {
     /// let builder = TransactionPayload::builder()
     ///     .command(Command::CancelOrder(
     ///         CancelOrderRequest::builder()
-    ///             .account("0x123")
-    ///             .market("0x123")
+    ///             .account("0x0000000000000000000000000000000000000000000000000000000000000123")
+    ///             .market("0x0000000000000000000000000000000000000000000000000000000000000123")
     ///             .build()
     ///             .expect("Failed to build cancel order")
     ///     ));
@@ -431,8 +447,8 @@ impl TransactionPayloadBuilder {
     /// let commands = vec![
     ///     Command::CancelOrder(
     ///         CancelOrderRequest::builder()
-    ///             .account("0x123")
-    ///             .market("0x123")
+    ///             .account("0x0000000000000000000000000000000000000000000000000000000000000123")
+    ///             .market("0x0000000000000000000000000000000000000000000000000000000000000123")
     ///             .build()
     ///             .expect("Failed to build")
     ///     ),
@@ -466,6 +482,9 @@ impl TransactionPayloadBuilder {
     /// - `chain_id` has not been set
     /// - No commands have been added (at least one is required)
     ///
+    /// Returns `TransactionPayloadBuilderError::TooManyCommands` if more than
+    /// [`MAX_TRANSACTION_COMMANDS`] commands have been added.
+    ///
     /// # Notes
     ///
     /// The `sender` field is optional during building and defaults to an empty string
@@ -483,8 +502,8 @@ impl TransactionPayloadBuilder {
     ///     .chain_id("real-1")
     ///     .command(Command::CancelOrder(
     ///         CancelOrderRequest::builder()
-    ///             .account("0x123")
-    ///             .market("0x123")
+    ///             .account("0x0000000000000000000000000000000000000000000000000000000000000123")
+    ///             .market("0x0000000000000000000000000000000000000000000000000000000000000123")
     ///             .build()
     ///             .expect("Failed to build cancel order"),
     ///     ))
@@ -505,6 +524,12 @@ impl TransactionPayloadBuilder {
 
         if self.commands.is_empty() {
             return Err(TransactionPayloadBuilderError::MissingField { field: "commands" });
+        }
+
+        if self.commands.len() > MAX_TRANSACTION_COMMANDS {
+            return Err(TransactionPayloadBuilderError::TooManyCommands {
+                count: self.commands.len(),
+            });
         }
 
         return Ok(TransactionPayload {
@@ -561,6 +586,8 @@ impl TransactionPayload {
                 .with_details(format!("Base64 decode failed: {}", e))
         })?;
 
+        json::check_untrusted_nesting(&buf)
+            .map_err(|e| ERROR_INVALID_TRANSACTION_PAYLOAD.with_details(e.to_string()))?;
         return json::from_slice::<TransactionPayload>(&buf).map_err(|e| {
             ERROR_INVALID_TRANSACTION_PAYLOAD
                 .with_details(format!("JSON deserialization failed: {}", e))
@@ -629,7 +656,7 @@ impl TransactionPayload {
 /// let tx = Transaction::builder()
 ///     .client_request_id("393e6d50-7cf7-4069-a758-0e837e7178bc")
 ///     .payload(payload)
-///     .sign_and_build("iotaprivkey1qrsd...")
+///     .sign_and_build("<bech32 private key>")
 ///     .expect("Failed to sign");
 /// # }
 /// ```
@@ -692,7 +719,7 @@ pub enum TransactionBuilderError {
 ///
 /// let tx = Transaction::builder()
 ///     .payload(payload)
-///     .sign_and_build("iotaprivkey1qrsd...")
+///     .sign_and_build("<bech32 private key>")
 ///     .expect("Failed to sign");
 /// # }
 /// ```
@@ -1040,7 +1067,76 @@ impl Transaction {
 mod tests {
     use base64_simd::STANDARD as BASE64;
 
-    use crate::api::{TransactionPayload, errors::ErrorString};
+    use crate::api::{
+        CancelOrderRequest, Command, MAX_TRANSACTION_COMMANDS, TransactionPayload,
+        TransactionPayloadBuilderError, errors::ErrorString,
+    };
+
+    // an unknown field nested past the limit: sonic would skip it by recursing
+    // once per level and overflow the stack, so it is refused before parsing;
+    // serde_json skips it without recursing, and the payload decodes
+    #[test]
+    fn a_payload_nested_past_the_limit_never_overflows_the_stack() {
+        let deep = format!("{}{}", "[".repeat(20_000), "]".repeat(20_000));
+        let payload =
+            format!(r#"{{"owner":"0x1","nonce":1,"chain_id":"real-1","commands":[],"x":{deep}}}"#);
+
+        let decoded = TransactionPayload::from_base64(&BASE64.encode_to_string(payload));
+
+        if json::UNTRUSTED_NESTING_CHECKED {
+            let err = decoded.unwrap_err();
+            assert_eq!(err.error_code, 401);
+            assert_eq!(
+                err.details.as_deref(),
+                Some("JSON nests arrays or objects deeper than 128 levels")
+            );
+        } else {
+            assert_eq!(&*decoded.unwrap().owner, "0x1");
+        }
+    }
+
+    fn cancels(count: usize) -> Vec<Command> {
+        let cancel = Command::CancelOrder(
+            CancelOrderRequest::builder()
+                .account("0x123")
+                .market("0x123")
+                .order_id(42)
+                .build()
+                .unwrap(),
+        );
+        return vec![cancel; count];
+    }
+
+    fn payload_of(
+        commands: Vec<Command>,
+    ) -> Result<TransactionPayload, TransactionPayloadBuilderError> {
+        return TransactionPayload::builder()
+            .nonce(1)
+            .chain_id("real-1")
+            .commands(commands)
+            .build();
+    }
+
+    #[test]
+    fn the_builder_accepts_the_most_commands_a_transaction_may_carry() {
+        let payload = payload_of(cancels(MAX_TRANSACTION_COMMANDS)).unwrap();
+
+        assert_eq!(payload.commands.len(), MAX_TRANSACTION_COMMANDS);
+    }
+
+    #[test]
+    fn the_builder_refuses_one_command_more() {
+        let result = payload_of(cancels(MAX_TRANSACTION_COMMANDS + 1));
+
+        assert!(
+            matches!(
+                result,
+                Err(TransactionPayloadBuilderError::TooManyCommands { count })
+                    if count == MAX_TRANSACTION_COMMANDS + 1
+            ),
+            "{result:?}"
+        );
+    }
 
     fn payload_for_chain(chain_id: &str) -> TransactionPayload {
         return TransactionPayload {

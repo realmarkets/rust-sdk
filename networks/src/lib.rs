@@ -64,6 +64,16 @@ impl Network {
             Network::Mainnet => "real-0001",
         };
     }
+
+    /// The domain real.xyz writes into the message an external wallet signs at sign-in. It is
+    /// an input to every wallet derived from that signature, so it is not the app's host name:
+    /// changing it changes every such user's address.
+    pub fn sign_in_domain(self) -> &'static str {
+        return match self {
+            Network::Testnet => "testnet.real.xyz",
+            Network::Mainnet => "real.xyz",
+        };
+    }
 }
 
 impl fmt::Display for Network {
@@ -108,6 +118,13 @@ mod tests {
         for network in Network::ALL {
             assert!(network.candles_url().starts_with("https://"));
         }
+    }
+
+    // every wallet derived at sign-in depends on these exact strings
+    #[test]
+    fn sign_in_domains_are_pinned() {
+        assert_eq!(Network::Testnet.sign_in_domain(), "testnet.real.xyz");
+        assert_eq!(Network::Mainnet.sign_in_domain(), "real.xyz");
     }
 
     // a client reads REST and the stream from the same deployment only if both

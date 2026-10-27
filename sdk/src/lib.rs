@@ -11,7 +11,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // a private key in IOTA bech32 form (`iotaprivkey1…`), not hex
+//!     // a bech32-encoded private key, not hex
 //!     let signer: Signer =
 //!         "iotaprivkey1qrsd2u9ztqr6z2y78sp2ch8kcyak9cx3ezphkpp4acqaqruajxr6qye2645".into();
 //!
@@ -64,7 +64,8 @@
 //! - [`client`]: HTTP JSON-RPC client for connecting to the matching engine
 //! - [`signing_client`]: High-level client with automatic transaction signing
 //! - [`types`]: Data types for orders, transactions, and API responses
-//! - [`crypto`]: Cryptographic utilities for signing and verification
+//! - [`crypto`]: Cryptographic utilities for signing and verification, and the
+//!   wallet real.xyz derives for an Ethereum or Solana account
 
 pub use client::Client;
 pub use networks::Network;
@@ -102,6 +103,26 @@ pub mod types {
 /// This module provides functionality for creating digital signatures required
 /// by the matching engine, managing keystores, and verifying message signatures.
 /// All transactions must be cryptographically signed before submission.
+///
+/// [`sign_in`](crate::crypto::sign_in) recovers the wallet real.xyz derives for an
+/// Ethereum or Solana account, as a [`MnemonicSigner`](crate::crypto::MnemonicSigner) that
+/// also hands out its 24 words and private key:
+///
+/// ```rust
+/// use sdk::{Network, crypto::sign_in::{EthereumKey, SignInKey}};
+///
+/// let key: EthereumKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+///     .parse()
+///     .unwrap();
+/// let wallet = key.sign_in(Network::Testnet);
+/// assert_eq!(
+///     wallet.address(),
+///     "0x5de79353c5b4410fb3201e2c85e452c7067590fc18e97e78a23441200c1d331b",
+/// );
+/// ```
 pub mod crypto {
-    pub use crypto::{Signer, keystore::Keystore, raw::RawSigner, verify_message_signature};
+    pub use crypto::{
+        InvalidMnemonic, MnemonicSigner, Signer, keystore::Keystore, raw::RawSigner, sign_in,
+        verify_message_signature,
+    };
 }

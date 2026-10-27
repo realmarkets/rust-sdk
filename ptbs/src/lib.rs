@@ -1,8 +1,8 @@
-//! Every IOTA programmable transaction block this system sends, assembled command by
+//! Every programmable transaction block this system sends, assembled command by
 //! command: one module under [`contracts`] per Move module the DEX exposes (`account`,
-//! `market`, `collateral`, `fee`, `registry`, `soul_bound`, `faucet`, `funding`, the
-//! price sources), each method one `Command::MoveCall` carrying the contract's own
-//! argument order.
+//! `market`, `collateral`, `fee`, `insurance`, `registry`, `soul_bound`, `faucet`,
+//! `funding`, the price sources), each method one `Command::MoveCall` carrying the
+//! contract's own argument order.
 //!
 //! Start at [`TransactionBuilder`]: wrap a [`TransientCache`], call contract methods on
 //! it in execution order, `finish()` for a `ProgrammableTransaction`. The contract
@@ -10,14 +10,16 @@
 //! package address plus the shared-object inputs they always pass — cheap to clone and
 //! hold. Object arguments resolve through [`ObjectArgCache`], process-wide behind an
 //! `RwLock`, with a per-PTB [`TransientCache`] in front so repeat lookups inside one
-//! block never touch the shared lock. [`IotaClientExt`] is the read surface PTB building
-//! needs (object args, gas coins, dynamic fields, parsed objects); [`isolated_markets`]
-//! is the one query big enough for its own module.
+//! block never touch the shared lock; a miss is fetched from the cache's
+//! [`ObjectArgSource`]. [`IotaClientExt`] is the read surface PTB building needs (object
+//! args, gas coins, dynamic fields) over a fullnode's gRPC API, which serves objects as
+//! BCS: typed reads decode them into [`mirrors`]. [`isolated_markets`] is the one query
+//! big enough for its own module.
 //!
 //! It stops at the `ProgrammableTransaction`. Gas selection, signing, gas-station
-//! reservation and submission are the caller's — `bot::tx` for the bots,
-//! `iota_execution` for the sequencer — as is deciding *when* to send. Nothing here
-//! reads config or discovers package addresses and object ids: `iota_execution`'s
+//! reservation and submission are the caller's — `bot::tx` for the bots, the
+//! execution sidecar for the sequencer — as is deciding *when* to send. Nothing here
+//! reads config or discovers package addresses and object ids: the sidecar's
 //! contract set rebuilds these handles on a package upgrade and swaps them wholesale,
 //! and `dex` layers the multi-call flows on top. The crate ships in the public SDK
 //! (`scripts/update-sdk.sh`), so it carries no proto code and no engine state; `types`
@@ -31,7 +33,7 @@
 //!
 //! Several entrypoints return a hot potato the block must consume before it ends, so
 //! those calls belong in one PTB: `margin_visitor` → `visit_position` / `visit_inspect`
-//! → `finish_inspect` or `destroy_visitor`; `accountant` → `declare_bankruptcy` /
+//! → `finish_inspect_v2` or `destroy_visitor`; `accountant` → `declare_bankruptcy` /
 //! `settle_insurance` / `adl` → `destroy_accountant`; `soul_bound::borrow` →
 //! `return_val`. The returned `Argument` threads straight back in as an
 //! [`IntoArgument`], which is why every argument position accepts either a fetched
@@ -44,17 +46,26 @@
 pub mod builder;
 pub mod cache;
 pub mod contracts;
+pub mod dynamic_field;
+pub mod grpc;
 pub mod isolated;
+pub mod mirrors;
+pub mod object_source;
+pub mod programmable;
 pub mod utils;
 
 // Re-export commonly used types
 pub use builder::{IntoArgument, TransactionBuilder};
 pub use cache::{ObjectArgCache, ObjectArgCacheT, TransientCache};
 pub use contracts::{
-    Coin, Collateral, Faucet, Fee, Registry, SoulBound, abstract_source::AbstractSource,
+    Coin, Collateral, Faucet, Fee, Insurance, Registry, SoulBound, abstract_source::AbstractSource,
     account::Account, fixed18::Fixed18, funding::Funding, iota::Object, lazer_source::LazerSource,
     market::Market, mock_source::MockSource,
 };
+pub use dynamic_field::{DynamicFieldInfo, DynamicFieldKind, DynamicFieldName};
+pub use grpc::{GrpcClient, IotaClientExt};
 pub use isolated::{MAX_ISOLATED_SCAN, isolated_markets};
+pub use object_source::ObjectArgSource;
+pub use programmable::ProgrammableTransactionBuilder;
 pub use types::common::MarketVersion;
-pub use utils::{GasCoinDetails, IotaClientExt, Mutable, RetryHook, backoff_for};
+pub use utils::{GasCoinDetails, Mutable, RetryHook, backoff_for};

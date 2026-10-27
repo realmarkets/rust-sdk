@@ -58,6 +58,7 @@ fn frozen_conditional() -> Conditional {
         }),
         oco_link: Some(OcoOrderLink::ClientOrderId("sibling".into())),
         status: ConditionalStatus::PendingActivation,
+        close_on_trigger: true,
     };
 }
 
@@ -90,7 +91,7 @@ fn frozen_orders_terminated() -> OrdersTerminated {
     };
 }
 
-const ORDER_PLACED_JSON: &str = r#"{"id":"111111","market":"0xmkt","sender":"0xsender","account":"0xaccount","type":"Limit","price":"110.45","quantity":"1","filled_quantity":"0.5","remaining_quantity":"0.5","stopped_quantity":"0","side":"Buy","reduce_only":false,"post_only":true,"expires_at_ms":1700000060000,"tif":"GTT","created_at_ms":1700000000000,"updated_at_ms":1700000000123,"status":"Active","error":"InsufficientMargin","client_order_id":"client-id","conditional":{"trigger_condition":"FallsBelow","trigger":{"Price":"99.5"},"reference_price":"Mark","expiry":{"timestamp_ms":1700000050000,"trigger":true},"quantity":{"Absolute":"3.25"},"order_link":{"activation":{"OrderId":"4242"},"fill_quantity":"1.5"},"oco_link":{"ClientOrderId":"sibling"},"status":"PendingActivation"}}"#;
+const ORDER_PLACED_JSON: &str = r#"{"id":"111111","market":"0xmkt","sender":"0xsender","account":"0xaccount","type":"Limit","price":"110.45","quantity":"1","filled_quantity":"0.5","remaining_quantity":"0.5","stopped_quantity":"0","side":"Buy","reduce_only":false,"post_only":true,"expires_at_ms":1700000060000,"tif":"GTT","created_at_ms":1700000000000,"updated_at_ms":1700000000123,"status":"Active","error":"InsufficientMargin","client_order_id":"client-id","conditional":{"trigger_condition":"FallsBelow","trigger":{"Price":"99.5"},"reference_price":"Mark","expiry":{"timestamp_ms":1700000050000,"trigger":true},"quantity":{"Absolute":"3.25"},"order_link":{"activation":{"OrderId":"4242"},"fill_quantity":"1.5"},"oco_link":{"ClientOrderId":"sibling"},"status":"PendingActivation","close_on_trigger":true}}"#;
 
 const TRADE_EXECUTED_JSON: &str = r#"{"market":"0xmkt","id":7,"side":"Sell","buyer_order":"11","seller_order":"12","buyer":"0xbuyer","seller":"0xseller","price":"100.5","volume":"2.25","trade_type":"Normal","created_at_ms":1700000000123,"buyer_revision":10,"seller_revision":20}"#;
 
@@ -271,6 +272,17 @@ fn frozen_json_deserializes_back_into_the_same_receipts() {
         json::from_str::<OrdersTerminated>(ORDERS_TERMINATED_JSON).unwrap(),
         frozen_orders_terminated()
     );
+}
+
+// a sequencer that predates close-on-trigger sends conditionals without the
+// flag, and the SDK must still parse them
+#[test]
+fn a_conditional_receipt_without_close_on_trigger_reads_it_as_false() {
+    let older = ORDER_PLACED_JSON.replace(r#","close_on_trigger":true"#, "");
+    let mut expected = frozen_order_placed();
+    expected.conditional.as_mut().unwrap().close_on_trigger = false;
+
+    assert_eq!(json::from_str::<OrderPlaced>(&older).unwrap(), expected);
 }
 
 #[test]

@@ -1,7 +1,7 @@
-//! File-based keystore management for IOTA cryptographic operations.
+//! File-based keystore management for signing operations.
 //!
 //! This module provides a high-level interface for managing keys stored in
-//! IOTA's file-based keystore format. It supports:
+//! the CLI's file-based keystore format. It supports:
 //! - Loading keys by alias from keystore files
 //! - Extracting addresses and public keys
 //! - Message signing with automatic intent wrapping
@@ -10,10 +10,10 @@
 //! # Key Features
 //!
 //! - **Alias-based Key Loading**: Load keys using human-readable aliases
-//! - **File-based Storage**: Integrates with IOTA's keystore file format
-//! - **Ed25519 Signatures**: Using IOTA's signature scheme
+//! - **File-based Storage**: Integrates with the CLI's keystore file format
+//! - **Ed25519 Signatures**: Using the chain's signature scheme
 //! - **blake2b256 Digest**: signatures cover blake2b256 over the BCS-encoded intent message
-//! - **IOTA Personal Message Intent**: Proper intent wrapping for security
+//! - **Personal Message Intent**: Proper intent wrapping for security
 //!
 //! # Examples
 //!
@@ -21,7 +21,7 @@
 //! use crypto::keystore::Keystore;
 //!
 //! // Load a key by alias from keystore
-//! let keystore = Keystore::new_with_alias("./iota.keystore", "my-key").unwrap();
+//! let keystore = Keystore::new_with_alias("./wallet.keystore", "my-key").unwrap();
 //!
 //! // Get address and public key
 //! let address = keystore.address();
@@ -33,14 +33,14 @@
 
 use std::path::PathBuf;
 
-use iota_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore as IotaKeystore};
 use iota_sdk_crypto::{ToFromBech32, simple::SimpleKeypair};
 use iota_sdk_types::{Address, Intent, IntentMessage, SignatureScheme, SimpleSignature};
+use keyring::{AccountKeystore, FileBasedKeystore, Keystore as IotaKeystore};
 use serde::Serialize;
 
 use crate::intent::sign_intent;
 
-/// A wrapper around IOTA's file-based keystore for signing operations.
+/// A wrapper around a file-based keystore for signing operations.
 ///
 /// Provides convenient methods for loading keys by alias and performing
 /// cryptographic operations like signing and address derivation.
@@ -60,7 +60,7 @@ impl Keystore {
     ///
     /// # Arguments
     ///
-    /// * `path` - Path where the keystore file should be created (e.g., "./iota.keystore")
+    /// * `path` - Path where the keystore file should be created (e.g., "./wallet.keystore")
     /// * `alias` - Human-readable alias for the new key (e.g., "deployer", "admin")
     ///
     /// # Returns
@@ -74,11 +74,11 @@ impl Keystore {
     /// use crypto::keystore::Keystore;
     ///
     /// // Create a new keystore and generate a key with alias "my-key"
-    /// let address = Keystore::init_with_alias("./iota.keystore", "my-key").unwrap();
+    /// let address = Keystore::init_with_alias("./wallet.keystore", "my-key").unwrap();
     /// println!("Generated new key with address: {}", address);
     ///
     /// // Now you can load it using new_with_alias
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "my-key").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "my-key").unwrap();
     /// ```
     pub fn init_with_alias<P: Into<PathBuf>>(path: P, alias: &str) -> anyhow::Result<Address> {
         let mut ks: IotaKeystore = FileBasedKeystore::new(&path.into())?.into();
@@ -97,7 +97,7 @@ impl Keystore {
     ///
     /// # Arguments
     ///
-    /// * `path` - Path where the keystore file should be created (e.g., "./iota.keystore")
+    /// * `path` - Path where the keystore file should be created (e.g., "./wallet.keystore")
     /// * `alias` - Human-readable alias for the new key (e.g., "deployer", "admin")
     ///
     /// # Returns
@@ -111,11 +111,11 @@ impl Keystore {
     /// use crypto::keystore::Keystore;
     ///
     /// // Generate a new key with alias "my-key"
-    /// let address = Keystore::generate_new_key_with_alias("./iota.keystore", "my-key").unwrap();
+    /// let address = Keystore::generate_new_key_with_alias("./wallet.keystore", "my-key").unwrap();
     /// println!("Generated new key with address: {}", address);
     ///
     /// // Now you can load it using new_with_alias
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "my-key").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "my-key").unwrap();
     /// ```
     pub fn generate_new_key_with_alias<P: Into<PathBuf>>(
         path: P,
@@ -128,35 +128,27 @@ impl Keystore {
     ///
     /// # Arguments
     ///
-    /// * `path` - Path to the keystore file (e.g., "./iota.keystore")
+    /// * `path` - Path to the keystore file (e.g., "./wallet.keystore")
     /// * `alias` - Human-readable alias for the key (e.g., "deployer", "admin")
     ///
     /// # Returns
     ///
     /// * `Ok(Keystore)` - Successfully loaded keystore
-    /// * `Err` - If the keystore file cannot be opened or parsed, or the alias is not present
-    ///
-    /// # Panics
-    ///
-    /// Panics if the entry stored under `alias` is not a key pair: `Account` and `External`
-    /// (e.g. hardware-backed) entries carry no private key, and the load unwraps that error.
+    /// * `Err` - If the keystore file cannot be opened or parsed (a legacy v1 file included),
+    ///   the alias is not present, or its entry holds no private key: `Account` and
+    ///   `External` (e.g. hardware-backed) entries cannot sign
     ///
     /// # Example
     ///
     /// ```rust,no_run
     /// use crypto::keystore::Keystore;
     ///
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "deployer").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "deployer").unwrap();
     /// ```
     pub fn new_with_alias<P: Into<PathBuf>>(path: P, alias: &str) -> anyhow::Result<Keystore> {
         let store: IotaKeystore = FileBasedKeystore::new(&path.into())?.into();
         let address = *store.get_address_by_alias(alias.into())?;
-        let keypair = store
-            .get_key(&address)
-            .expect("key should be available here")
-            .as_keypair()
-            .unwrap()
-            .clone();
+        let keypair = store.get_key(&address)?.as_keypair()?.clone();
 
         return Ok(Keystore {
             keypair,
@@ -175,7 +167,7 @@ impl Keystore {
         return self.alias.clone();
     }
 
-    /// Returns the IOTA blockchain address derived from the key.
+    /// Returns the address derived from the key.
     ///
     /// # Returns
     ///
@@ -186,7 +178,7 @@ impl Keystore {
     /// ```rust,no_run
     /// use crypto::keystore::Keystore;
     ///
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "deployer").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "deployer").unwrap();
     /// let address = keystore.address();
     /// assert!(address.starts_with("0x"));
     /// ```
@@ -205,7 +197,7 @@ impl Keystore {
     /// ```rust,no_run
     /// use crypto::keystore::Keystore;
     ///
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "deployer").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "deployer").unwrap();
     /// let pubkey = keystore.pubkey();
     /// ```
     pub fn pubkey(&self) -> String {
@@ -219,7 +211,7 @@ impl Keystore {
     ///
     /// # Returns
     ///
-    /// * `Ok(String)` - Bech32 private key with the `iotaprivkey` prefix (e.g., "iotaprivkey1qrsd...")
+    /// * `Ok(String)` - Bech32-encoded private key
     /// * `Err` - Encoding failed
     ///
     /// # Example
@@ -227,9 +219,9 @@ impl Keystore {
     /// ```rust,no_run
     /// use crypto::keystore::Keystore;
     ///
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "deployer").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "deployer").unwrap();
     /// let privkey = keystore.privkey().unwrap();
-    /// assert!(privkey.starts_with("iotaprivkey1"));
+    /// assert!(crypto::raw::RawSigner::new(&privkey).is_ok());
     /// ```
     pub fn privkey(&self) -> anyhow::Result<String> {
         let privkey = self
@@ -240,9 +232,9 @@ impl Keystore {
         return Ok(privkey);
     }
 
-    /// Signs a message using Ed25519 with IOTA personal message intent.
+    /// Signs a message using Ed25519 with the personal message intent.
     ///
-    /// The message is wrapped in IOTA's personal message intent; the signed digest is
+    /// The message is wrapped in the personal message intent; the signed digest is
     /// blake2b256 over the BCS encoding of that intent message.
     ///
     /// # Arguments
@@ -258,7 +250,7 @@ impl Keystore {
     /// ```rust,no_run
     /// use crypto::keystore::Keystore;
     ///
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "deployer").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "deployer").unwrap();
     /// let signature = keystore.sign_message("hello world");
     /// ```
     pub fn sign_message(&self, message: &str) -> String {
@@ -272,20 +264,20 @@ impl Keystore {
         return signature.to_base64();
     }
 
-    /// Signs a serializable message with a custom IOTA intent.
+    /// Signs a serializable message with a custom intent.
     ///
     /// This is an advanced signing method that allows you to specify a custom intent
     /// for the signature. This is useful for signing transactions, smart contract calls,
-    /// or other IOTA-specific operations that require specific intent scopes.
+    /// or other on-chain operations that require specific intent scopes.
     ///
     /// # Arguments
     ///
     /// * `msg` - Any serializable value to sign
-    /// * `intent` - The IOTA intent to use for signing
+    /// * `intent` - The intent to use for signing
     ///
     /// # Returns
     ///
-    /// An `iota_sdk_types::SimpleSignature`
+    /// A `SimpleSignature`
     ///
     /// # Example
     ///
@@ -300,7 +292,7 @@ impl Keystore {
     ///     amount: u64,
     /// }
     ///
-    /// let keystore = Keystore::new_with_alias("./iota.keystore", "deployer").unwrap();
+    /// let keystore = Keystore::new_with_alias("./wallet.keystore", "deployer").unwrap();
     /// let tx = Transaction { to: "0x123...".to_string(), amount: 1000 };
     ///
     /// let intent = Intent {
@@ -319,3 +311,6 @@ impl Keystore {
         return sign_intent(intent_msg, &self.keypair);
     }
 }
+
+#[cfg(test)]
+mod tests;

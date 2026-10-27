@@ -6,17 +6,25 @@ license = "Apache-2.0"
 publish.workspace = true
 
 [dependencies]
+alloy-primitives = { workspace = true }
 anyhow = { workspace = true }
-iota-json-rpc-api = { workspace = true }
-iota-json-rpc-types = { workspace = true }
-iota-sdk = { workspace = true }
+bcs = { workspace = true }
+futures-util = { workspace = true }
+indexmap = { workspace = true }
+iota-sdk-grpc-client = { workspace = true }
+iota-sdk-grpc-types = { workspace = true }
 iota-sdk-types = { workspace = true }
-iota-types = { workspace = true }
-move-core-types = { workspace = true }
-serde_json = { workspace = true }
+serde = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 types = { workspace = true }
+
+[features]
+# grpc::mock_node, for crates that test against a fullnode served from memory
+test-helpers = ["tokio/net"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["net", "test-util"] }
 
 [lints]
 workspace = true

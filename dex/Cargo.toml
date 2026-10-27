@@ -7,19 +7,22 @@ publish.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+bcs = { workspace = true }
 crypto = { workspace = true }
-iota-json-rpc-types = { workspace = true }
-iota-sdk = { workspace = true }
+iota-sdk-grpc-client = { workspace = true }
+iota-sdk-grpc-types = { workspace = true }
 iota-sdk-types = { workspace = true }
-iota-types = { workspace = true }
 ptbs = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { version = "0.12", features = ["json"] }
+tokio = { workspace = true }
 
 [dev-dependencies]
 clap = { version = "4.5", features = ["derive"] }
+iota-sdk-crypto = { workspace = true }
 networks = { workspace = true }
+ptbs = { workspace = true, features = ["test-helpers"] }
 tokio = { workspace = true }
 
 [lints]

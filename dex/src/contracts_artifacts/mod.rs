@@ -19,6 +19,9 @@ pub struct Git {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Metadata {
     pub rpc_network: String,
+    /// The network's gRPC endpoint, which [`crate::iota::IotaNetwork::Custom`]
+    /// takes.
+    pub grpc_network: String,
     pub checkpoint_sequence: u64,
     pub date: String,
     /// Absent on mainnet.

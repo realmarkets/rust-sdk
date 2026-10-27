@@ -1,0 +1,35 @@
+[package]
+name = "keyring"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+publish.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+bip32 = { workspace = true }
+tiny-bip39 = { workspace = true }
+enum_dispatch = { workspace = true }
+fastcrypto = { workspace = true }
+iota-sdk-crypto = { workspace = true, features = [
+  "bech32",
+  "ed25519",
+  "rand",
+  "secp256k1",
+  "secp256r1",
+] }
+iota-sdk-types = { workspace = true }
+rand = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+signature = { workspace = true }
+slip10_ed25519 = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

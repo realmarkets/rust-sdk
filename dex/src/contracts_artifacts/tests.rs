@@ -23,6 +23,10 @@ fn mainnet_reads_without_a_faucet_or_a_market_list() {
     assert_eq!(mainnet.metadata.faucet_mint_amount, None);
     assert!(mainnet.markets.is_empty());
     assert_eq!(
+        mainnet.metadata.grpc_network,
+        "https://grpc.mainnet.iota.cafe:443"
+    );
+    assert_eq!(
         mainnet.coins.stable.r#type,
         "0x25afeacdd3b0e757ae40aa4b9852261003e1dffeeb37d2c4f2904bb809807ac9::usdt0::USDT0"
     );
@@ -65,6 +69,10 @@ fn testnet_keeps_its_faucet_and_markets() {
         ]
     );
     assert_eq!(testnet.metadata.faucet_mint_amount, Some(1000));
+    assert_eq!(
+        testnet.metadata.grpc_network,
+        "https://grpc.testnet.iota.cafe"
+    );
     assert_eq!(
         config.faucet_package_address,
         "0x0ea68d80ff2bd2c9bca62b94ec77823059fd27786e1466fcde821cce5f4f1d57"

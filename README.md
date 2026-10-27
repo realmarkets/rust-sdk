@@ -11,7 +11,8 @@ API documentation: https://docs.real.xyz/rust-sdk/sdk/index.html
 | [`sdk`](sdk) | Matching engine client: sign and submit orders, cancels and margin changes |
 | [`dex`](dex) | On-chain operations: create trading accounts, deposit funds |
 | [`indexer-api`](indexer-api) | Indexer REST client and WebSocket market data streams |
-| [`crypto`](crypto) | Key management (raw keys and IOTA keystores) and signing |
+| [`crypto`](crypto) | Key management (raw keys, mnemonics and IOTA keystores), signing and wallet sign-in |
+| [`keyring`](keyring) | File keystore compatible with the IOTA CLI: read, write and derive keys |
 | [`types`](types) | Request and response types |
 | [`realacct`](tools/realacct) | Interactive CLI to create and fund a trading account |
 
@@ -79,6 +80,7 @@ Every client has one constructor per network, e.g. `SigningClient::new_testnet` 
 ```bash
 cargo run -p sdk --example signing_client
 cargo run -p sdk --example cancel_order
+SIGN_IN_PRIVATE_KEY=… cargo run -p sdk --example sign_in -- ethereum
 
 cargo run -p dex --example create_account -- --help
 cargo run -p dex --example deposit_funds -- --help

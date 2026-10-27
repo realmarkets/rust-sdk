@@ -40,11 +40,14 @@ impl LiquidatePositionRequestBuilder {
         Self::default()
     }
 
+    /// The liquidator's account id, `0x` and 64 lower-case hex digits; the sequencer refuses any
+    /// other spelling, which [`build()`](Self::build) does not catch.
     pub fn account<S: Into<String>>(mut self, account: S) -> Self {
         self.account = Some(account.into());
         self
     }
 
+    /// The distressed account's id, spelt like [`account`](Self::account).
     pub fn distressed_account<S: Into<String>>(mut self, distressed_account: S) -> Self {
         self.distressed_account = Some(distressed_account.into());
         self
