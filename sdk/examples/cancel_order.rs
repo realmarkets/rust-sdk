@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // our private key
     let tx = Transaction::builder()
         // this is optional
-        .client_request_id(uuid::Uuid::new_v4())
+        .client_request_id(uuid::Uuid::new_v4().to_string())
         .payload(payload.clone())
         .sign_and_build(&signer)
         .unwrap();

@@ -1,9 +1,9 @@
+use alloy_primitives::U256;
 use iota_sdk_types::{Address, Argument, Command, Input, ObjectId, ProgrammableTransaction};
-use iota_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
-use move_core_types::u256::U256;
 
 use crate::{
     cache::{ObjectArgCacheT, TransientCache},
+    programmable::ProgrammableTransactionBuilder,
     utils::Mutable,
 };
 
@@ -124,13 +124,16 @@ impl IntoArgument for &str {
     }
 }
 
+// bcs-encodes to a Move `u256`: 32 little-endian bytes with no length prefix,
+// which is what a fixed-size array serialises as. alloy's own serde writes a
+// different form, so the value is never handed to bcs as a `U256`
 impl IntoArgument for U256 {
     fn pure<C: ObjectArgCacheT>(
         self,
         builder: &mut ProgrammableTransactionBuilder,
         _: &mut C,
     ) -> anyhow::Result<Argument> {
-        return builder.pure(self);
+        return builder.pure(self.to_le_bytes::<32>());
     }
 
     async fn obj<C: ObjectArgCacheT>(
@@ -318,5 +321,38 @@ mod tests {
         let inputs = builder.finish().inputs;
         assert_eq!(inputs.len(), 1);
         assert_eq!(inputs[0], Input::Pure(expected));
+    }
+
+    // a Move `u256` is 32 little-endian bytes with no length prefix
+    #[test]
+    fn u256_encodes_as_32_little_endian_bytes() {
+        let mut high_bit = [0u8; 32];
+        high_bit[31] = 0x80;
+        let cases = [
+            (U256::ZERO, [0u8; 32]),
+            (U256::from(1u8), {
+                let mut one = [0u8; 32];
+                one[0] = 1;
+                one
+            }),
+            (U256::MAX, [0xff; 32]),
+            (U256::from(1u8) << 255, high_bit),
+            (
+                U256::from_str(
+                    "0x0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+                )
+                .unwrap(),
+                std::array::from_fn(|i| 32 - i as u8),
+            ),
+        ];
+        for (value, bytes) in cases {
+            let mut builder = ProgrammableTransactionBuilder::new();
+            value.pure(&mut builder, &mut NoCache).unwrap();
+            assert_eq!(
+                builder.finish().inputs,
+                vec![Input::Pure(bytes.to_vec())],
+                "{value}"
+            );
+        }
     }
 }

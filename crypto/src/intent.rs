@@ -1,6 +1,6 @@
 //! Intent-message signing and verification.
 //!
-//! iota v1.31.1-beta removed `iota_types::crypto::IotaSignature`, the trait that
+//! The upstream node crates dropped, in v1.31.1-beta, the signature trait that
 //! layered these two operations onto the SDK's [`SimpleSignature`]. Both are now
 //! expressed directly against the SDK: [`IntentMessage::signing_digest`] hashes
 //! the same bytes the trait used to hash by hand (blake2b256 over the BCS

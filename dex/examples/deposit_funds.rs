@@ -4,8 +4,8 @@
 //!
 //! ```bash
 //! cargo run --example deposit_funds -- \
-//!   --private-key iotaprivkey1... \
-//!   --account-id 0x... \
+//!   --private-key <bech32 private key> \
+//!   --account-object-id 0x... \
 //!   --amount 1000000 \
 //!   --iota-network testnet
 //! ```
@@ -28,19 +28,19 @@ struct Args {
     #[arg(long, default_value = Network::Testnet.indexer_url())]
     indexer_url: String,
 
-    /// Your IOTA private key (iotaprivkey1...)
+    /// Your bech32-encoded private key
     #[arg(short, long)]
     private_key: String,
 
-    /// Account ID to deposit into (0x...)
-    #[arg(short = 'i', long)]
-    account_id: String,
+    /// Account object ID to deposit into (0x...), as `create_account` prints it
+    #[arg(short = 'o', long)]
+    account_object_id: String,
 
-    /// Amount to deposit in smallest unit (nIOTA for IOTA)
+    /// Amount to deposit in the coin's smallest unit
     #[arg(short = 'm', long)]
     amount: u64,
 
-    /// IOTA network to connect to (devnet, testnet, mainnet, or custom URL)
+    /// Network to connect to (devnet, testnet, mainnet, or custom gRPC URL)
     #[arg(long, default_value = "testnet")]
     iota_network: String,
 }
@@ -50,7 +50,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     println!(
-        "Depositing {} nIOTA into account on {} network...",
+        "Depositing {} into account on {} network...",
         args.amount, args.iota_network
     );
 
@@ -62,7 +62,7 @@ async fn main() -> Result<()> {
     // Create configuration from artifacts
     let config: AccountsConfig = artifacts.into();
 
-    // Connect to IOTA network
+    // Connect to the network
     let network = parse_network(&args.iota_network)?;
     let client = build_iota_client(&network).await?;
 
@@ -71,11 +71,13 @@ async fn main() -> Result<()> {
 
     // Deposit funds
     let accounts = Accounts::new(client, config, signer).await?;
-    let tx_digest = accounts.deposit(&args.account_id, args.amount).await?;
+    let tx_digest = accounts
+        .deposit(&args.account_object_id, args.amount)
+        .await?;
 
     println!("\n✓ Deposit successful!");
-    println!("  Account ID: {}", args.account_id);
-    println!("  Amount: {} nIOTA", args.amount);
+    println!("  Account Object ID: {}", args.account_object_id);
+    println!("  Amount: {}", args.amount);
     println!("  Transaction: {}", tx_digest);
 
     Ok(())
@@ -90,7 +92,7 @@ fn parse_network(network: &str) -> Result<IotaNetwork> {
             Ok(IotaNetwork::Custom(url.to_string()))
         }
         _ => Err(anyhow::anyhow!(
-            "Invalid network: {}. Must be 'devnet', 'testnet', 'mainnet', or a custom URL",
+            "Invalid network: {}. Must be 'devnet', 'testnet', 'mainnet', or a custom gRPC URL",
             network
         )),
     }

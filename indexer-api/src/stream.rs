@@ -143,6 +143,8 @@ pub enum Topic {
     MarketDepthDiff(Markets),
     /// Ticker updates for the given markets.
     MarketTicker(Markets),
+    /// Funding-rate estimates and settlements for the given markets.
+    FundingRates(Markets),
 
     /// Order lifecycle events matching the market **or** any listed account.
     OrderEvents(Scope),
@@ -181,6 +183,7 @@ impl Topic {
         match self {
             Topic::MarketDepthDiff(m) => f.market_depth_diff_market_ids.extend(m.0),
             Topic::MarketTicker(m) => f.market_ticker_market_ids.extend(m.0),
+            Topic::FundingRates(m) => f.funding_rates_market_ids.extend(m.0),
             Topic::OrderEvents(s) => {
                 f.order_events_market_ids.extend(s.market_ids);
                 f.order_events_account_ids.extend(s.account_ids);
@@ -270,6 +273,8 @@ struct Filters {
     funding_payments_market_ids: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     funding_payments_account_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    funding_rates_market_ids: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     withdrawals_account_ids: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -732,6 +737,9 @@ fn deserialize_event_data(event_name: &str, raw: Value) -> Result<StreamEventDat
         "fundingpayment" | "funding_payment" | "fundingpayments" | "funding_payments" => {
             json::from_value(raw).map(StreamEventData::FundingPayment)
         }
+        "fundingrate" | "funding_rate" | "fundingrates" | "funding_rates" => {
+            json::from_value(raw).map(StreamEventData::FundingRate)
+        }
         "liquidationtriggered" | "liquidation_triggered" => {
             json::from_value(raw).map(StreamEventData::LiquidationTriggered)
         }
@@ -790,6 +798,9 @@ pub enum StreamEventData {
 
     /// Funding payment event
     FundingPayment(FundingPayment),
+
+    /// Funding rate of one market at one estimator crank: an estimate or a settlement
+    FundingRate(FundingRate),
 
     /// Liquidation triggered for an account across one or more positions
     LiquidationTriggered(LiquidationTriggered),
@@ -944,6 +955,70 @@ pub struct LiquidationPosition {
     pub trade_id: Option<i64>,
     #[serde(alias = "st")]
     pub status: LiquidationStatus,
+}
+
+/// Funding-rate event (`FundingRate`): the rate of one market at one crank of its estimator,
+/// with the estimator parameters that produced it.
+///
+/// One crank reaches every market of its funding source, so `id` repeats across the events it
+/// produces. An estimator parameter is `None` while the indexer has seen no estimator for the
+/// market's funding source.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FundingRate {
+    #[serde(alias = "txd")]
+    pub tx_digest: String,
+    #[serde(alias = "i")]
+    pub id: String,
+    #[serde(alias = "m")]
+    pub market_id: String,
+    #[serde(alias = "fr")]
+    pub funding_rate: Decimal,
+    #[serde(alias = "pa")]
+    pub premium_average: Decimal,
+    #[serde(alias = "cp")]
+    pub corrected_premium: Decimal,
+    /// The estimate of a coming settlement, or the settlement itself
+    #[serde(alias = "st")]
+    pub status: FundingRateStatus,
+    #[serde(alias = "imn")]
+    pub impact_margin_notional: Decimal,
+    #[serde(default, alias = "sf_ms")]
+    pub settlement_frequency_ms: Option<u64>,
+    #[serde(default, alias = "wlf")]
+    pub window_length_factor: Option<u64>,
+    #[serde(default, alias = "ir")]
+    pub interest_rate: Option<Decimal>,
+    #[serde(default, alias = "dl")]
+    pub delta: Option<Decimal>,
+    #[serde(default, alias = "ub")]
+    pub upper_bound: Option<Decimal>,
+    #[serde(default, alias = "ott_ms")]
+    pub oracle_timestamp_tolerance_ms: Option<u64>,
+    #[serde(alias = "ca_ms")]
+    pub created_at_ms: u64,
+}
+
+/// Whether a [`FundingRate`] estimates a coming settlement or is the rate a settlement charged;
+/// each carries only its own time. On the wire, an object with exactly one key.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum FundingRateStatus {
+    Estimated(FundingEstimate),
+    Settled(FundingSettlement),
+}
+
+/// The `Estimated` status of a [`FundingRate`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FundingEstimate {
+    /// Time of the settlement the rate estimates
+    #[serde(alias = "nft_ms")]
+    pub next_funding_time_ms: u64,
+}
+
+/// The `Settled` status of a [`FundingRate`].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FundingSettlement {
+    #[serde(alias = "sl_ms")]
+    pub settled_at_ms: u64,
 }
 
 /// Market depth differential data from the stream
@@ -1111,6 +1186,94 @@ mod tests {
         assert_eq!(event.state_version.as_deref(), Some("12346"));
         assert_eq!(event.timestamp_ms, 1783382401000);
         assert!(matches!(event.data, StreamEventData::MarketDepthDiff(_)));
+    }
+
+    #[test]
+    fn subscribe_frame_names_the_funding_rate_markets() {
+        let topics = [Topic::FundingRates(Markets::new(["0xbtc", "0xeth"]))];
+        let v: Value = json::from_str(&build_subscribe_frame("funding", topics).unwrap()).unwrap();
+        assert_eq!(
+            v["d"]["funding_rates_market_ids"],
+            json::json!(["0xbtc", "0xeth"])
+        );
+    }
+
+    #[test]
+    fn decodes_a_funding_rate_estimate() {
+        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"FundingRate","d":{"txd":"0xtx","i":"0001","m":"0xbtc","fr":"0.0001","pa":"0.0002","cp":"0.0003","st":{"Estimated":{"nft_ms":4102444800000}},"imn":"1000","sf_ms":3600000,"wlf":8,"ir":"0.00001","dl":null,"ub":"0.05","ott_ms":null,"ca_ms":1783382400500}}"#;
+        let StreamMessage::Event(event) = parse_stream_message(text).unwrap() else {
+            panic!("expected a data event");
+        };
+        let StreamEventData::FundingRate(rate) = event.data else {
+            panic!("expected a funding rate, got {:?}", event.data);
+        };
+        assert_eq!(rate.tx_digest, "0xtx");
+        assert_eq!(rate.id, "0001");
+        assert_eq!(rate.market_id, "0xbtc");
+        assert_eq!(rate.funding_rate.to_string(), "0.0001");
+        assert_eq!(rate.premium_average.to_string(), "0.0002");
+        assert_eq!(rate.corrected_premium.to_string(), "0.0003");
+        assert_eq!(
+            rate.status,
+            FundingRateStatus::Estimated(FundingEstimate {
+                next_funding_time_ms: 4102444800000
+            })
+        );
+        assert_eq!(rate.impact_margin_notional.to_string(), "1000");
+        assert_eq!(rate.settlement_frequency_ms, Some(3600000));
+        assert_eq!(rate.window_length_factor, Some(8));
+        assert_eq!(
+            rate.interest_rate.map(|r| r.to_string()).as_deref(),
+            Some("0.00001")
+        );
+        assert_eq!(rate.delta, None);
+        assert_eq!(
+            rate.upper_bound.map(|r| r.to_string()).as_deref(),
+            Some("0.05")
+        );
+        assert_eq!(rate.oracle_timestamp_tolerance_ms, None);
+        assert_eq!(rate.created_at_ms, 1783382400500);
+    }
+
+    #[test]
+    fn decodes_a_funding_rate_settlement() {
+        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"FundingRate","d":{"txd":"0xtx","i":"0001","m":"0xbtc","fr":"0.0001","pa":"0.0002","cp":"0.0003","st":{"Settled":{"sl_ms":1783382400000}},"imn":"1000","sf_ms":null,"wlf":null,"ir":null,"dl":null,"ub":null,"ott_ms":null,"ca_ms":1783382400500}}"#;
+        let StreamMessage::Event(event) = parse_stream_message(text).unwrap() else {
+            panic!("expected a data event");
+        };
+        let StreamEventData::FundingRate(rate) = event.data else {
+            panic!("expected a funding rate, got {:?}", event.data);
+        };
+        assert_eq!(
+            rate.status,
+            FundingRateStatus::Settled(FundingSettlement {
+                settled_at_ms: 1783382400000
+            })
+        );
+    }
+
+    #[test]
+    fn decodes_an_account_event_of_an_unregistered_account() {
+        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"Account","d":{"sv":"9","i":"0xacc","oid":"0xobj","ca_ms":1792003084156,"rga_ms":null,"ua_ms":1792003735927,"a":null,"ai":null,"as":"0x2::usdc::USDC","rp":"0","sb":[{"as":"0x2::usdc::USDC","b":"7"}],"cd":true,"cw":true,"ct":true,"idle":true,"irle":false,"iwse":true,"ois":false,"cwc":0,"cwt":"0","awcda":true,"acwda":false,"mft":0,"tft":0,"dt":0}}"#;
+        let StreamMessage::Event(event) = parse_stream_message(text).unwrap() else {
+            panic!("expected a data event");
+        };
+        let StreamEventData::Account(account) = event.data else {
+            panic!("expected an account, got {:?}", event.data);
+        };
+        assert_eq!(account.account_index, None);
+        assert_eq!(account.address, None);
+        assert_eq!(account.registered_at_ms, None);
+        assert!(account.is_deposit_limit_exempt);
+        assert!(!account.is_rate_limit_exempt);
+        assert!(account.is_withdrawal_safeguard_exempt);
+        assert!(account.account_withdrawal_count_delay_active);
+        assert!(!account.account_cumulative_withdrawal_delay_active);
+        let [balance] = account.settled_balances.as_slice() else {
+            panic!("expected one settled balance");
+        };
+        assert_eq!(balance.asset_id, "0x2::usdc::USDC");
+        assert_eq!(balance.balance.to_string(), "7");
     }
 
     #[test]

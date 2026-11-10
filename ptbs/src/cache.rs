@@ -1,10 +1,12 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use iota_sdk::IotaClient;
 use iota_sdk_types::Input;
 use tokio::sync::RwLock;
 
-use crate::utils::{IotaClientExt, RetryHook};
+use crate::{
+    object_source::ObjectArgSource,
+    utils::{IntoObjectId, RetryHook},
+};
 
 #[allow(async_fn_in_trait)]
 pub trait ObjectArgCacheT {
@@ -13,7 +15,7 @@ pub trait ObjectArgCacheT {
 
 #[derive(Clone)]
 pub struct ObjectArgCache {
-    client: IotaClient,
+    source: Arc<dyn ObjectArgSource>,
     // retry window for transport failures on cache-miss fetches
     budget: Duration,
     on_retry: Option<RetryHook>,
@@ -22,9 +24,10 @@ pub struct ObjectArgCache {
 }
 
 impl ObjectArgCache {
-    pub fn new(client: IotaClient) -> ObjectArgCache {
+    /// A cache that fetches what it does not hold from `source`.
+    pub fn new(source: impl ObjectArgSource + 'static) -> ObjectArgCache {
         return ObjectArgCache {
-            client,
+            source: Arc::new(source),
             budget: Duration::ZERO,
             on_retry: None,
             objects: Arc::new(RwLock::new(HashMap::new())),
@@ -49,9 +52,10 @@ impl ObjectArgCache {
     }
 
     async fn write_object(&self, key: &str) -> anyhow::Result<Input> {
+        let object_id = key.into_object_id()?;
         let obj = self
-            .client
-            .get_object_arg_within(key, self.budget, self.on_retry.as_ref())
+            .source
+            .object_arg_within(object_id, self.budget, self.on_retry.as_ref())
             .await?;
 
         {

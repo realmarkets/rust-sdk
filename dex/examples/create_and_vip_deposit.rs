@@ -4,7 +4,7 @@
 //!
 //! ```bash
 //! cargo run --example create_and_vip_deposit -- \
-//!   --private-key iotaprivkey1... \
+//!   --private-key <bech32 private key> \
 //!   --iota-network testnet \
 //!   --account-index 0 \
 //!   --amount 1000000
@@ -31,11 +31,11 @@ struct Args {
     #[arg(long, default_value = Network::Testnet.indexer_url())]
     indexer_url: String,
 
-    /// Your IOTA private key (iotaprivkey1...)
+    /// Your bech32-encoded private key
     #[arg(short, long)]
     private_key: String,
 
-    /// IOTA network to connect to (devnet, testnet, mainnet, or custom URL)
+    /// Network to connect to (devnet, testnet, mainnet, or custom gRPC URL)
     #[arg(long, default_value = "testnet")]
     iota_network: String,
 
@@ -43,7 +43,7 @@ struct Args {
     #[arg(short = 'i', long, default_value = "0")]
     account_index: u32,
 
-    /// Amount to deposit in smallest unit (nIOTA for IOTA)
+    /// Amount to deposit in the coin's smallest unit
     #[arg(short = 'm', long)]
     amount: u64,
 }
@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     println!(
-        "Creating account and depositing {} nIOTA via VIP faucet on {} network...",
+        "Creating account and depositing {} via VIP faucet on {} network...",
         args.amount, args.iota_network
     );
 
@@ -65,7 +65,7 @@ async fn main() -> Result<()> {
     // Create configuration from artifacts
     let config: AccountsConfig = artifacts.into();
 
-    // Connect to IOTA network
+    // Connect to the network
     let network = parse_network(&args.iota_network)?;
     let client = build_iota_client(&network).await?;
 
@@ -90,7 +90,7 @@ async fn main() -> Result<()> {
 
     println!("\n✓ VIP deposit successful!");
     println!("  Account Object ID: {}", details.account_object_id);
-    println!("  Amount: {} nIOTA", args.amount);
+    println!("  Amount: {}", args.amount);
     println!("  Transaction: {}", tx_digest);
 
     Ok(())
@@ -105,7 +105,7 @@ fn parse_network(network: &str) -> Result<IotaNetwork> {
             Ok(IotaNetwork::Custom(url.to_string()))
         }
         _ => Err(anyhow::anyhow!(
-            "Invalid network: {}. Must be 'devnet', 'testnet', 'mainnet', or a custom URL",
+            "Invalid network: {}. Must be 'devnet', 'testnet', 'mainnet', or a custom gRPC URL",
             network
         )),
     }

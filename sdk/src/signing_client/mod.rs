@@ -31,7 +31,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // a private key in IOTA bech32 form (`iotaprivkey1…`), not hex
+//!     // a bech32-encoded private key, not hex
 //!     let signer: Signer =
 //!         "iotaprivkey1qrsd2u9ztqr6z2y78sp2ch8kcyak9cx3ezphkpp4acqaqruajxr6qye2645".into();
 //!
@@ -94,7 +94,7 @@ mod builder;
 /// use sdk::{SigningClient, crypto::Signer};
 ///
 /// # fn example() -> anyhow::Result<()> {
-/// // the key is an IOTA bech32 private key (`iotaprivkey1…`), not hex
+/// // the key is a bech32-encoded private key, not hex
 /// let signer: Signer =
 ///     "iotaprivkey1qrsd2u9ztqr6z2y78sp2ch8kcyak9cx3ezphkpp4acqaqruajxr6qye2645".into();
 /// let client = SigningClient::new_testnet(signer)?;

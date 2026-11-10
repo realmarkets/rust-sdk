@@ -1,15 +1,20 @@
 //! Cryptographic utilities for the Real Markets matching engine.
 //!
 //! This crate provides cryptographic functionality for signing transactions and managing
-//! private keys using the IOTA cryptographic primitives. It supports both raw private key
-//! signing and file-based keystore management.
+//! private keys with the chain's cryptographic primitives. It supports raw private key signing,
+//! file-based keystore management, mnemonics, and recovering the wallet real.xyz derives
+//! when a user signs in with an Ethereum or Solana wallet.
 //!
 //! # Key Features
 //!
-//! - **ED25519 Signatures**: Uses ED25519 elliptic curve cryptography for all signing operations
-//! - **IOTA Integration**: Built on IOTA's cryptographic primitives and address format
-//! - **Flexible Key Management**: Supports both raw private keys and file-based keystores
-//! - **Message Signing**: blake2b256 over the BCS-encoded IOTA PersonalMessage intent
+//! - **ED25519 Signatures**: account keys are Ed25519 and sign every transaction; secp256k1 only
+//!   appears where an Ethereum key signs the real.xyz sign-in message ([`sign_in`])
+//! - **Chain Integration**: Built on the chain's cryptographic primitives and address format
+//! - **Flexible Key Management**: Supports raw private keys, file-based keystores and BIP-39
+//!   mnemonics ([`MnemonicSigner`])
+//! - **Sign-in Wallets**: The wallet real.xyz derives for an Ethereum or Solana account, its 24
+//!   words and private key included ([`sign_in`])
+//! - **Message Signing**: blake2b256 over the BCS-encoded `PersonalMessage` intent
 //! - **Signature Verification**: Complete verification pipeline for message authenticity
 //!
 //! # Usage Examples
@@ -57,23 +62,44 @@
 //! println!("Address: {}", signer.address());
 //! ```
 //!
+//! ## Signing in with an Ethereum key
+//! ```rust
+//! use crypto::{Signer, sign_in::{EthereumKey, SignInKey}};
+//! use networks::Network;
+//!
+//! let key: EthereumKey = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+//!     .parse()
+//!     .unwrap();
+//!
+//! // the wallet real.xyz shows after connecting this key's browser wallet on mainnet
+//! let wallet = key.sign_in(Network::Mainnet);
+//! println!("Address: {}", wallet.address());
+//! println!("Words: {}", wallet.phrase());
+//! println!("Private key: {}", wallet.privkey().unwrap());
+//!
+//! let signer: Signer = wallet.into();
+//! ```
+//!
 //! # Security Notes
 //!
 //! - Signatures cover a blake2b256 digest of the BCS-encoded intent message, not the raw
-//!   message bytes — no keccak or SHA3 is involved anywhere in this crate (the SHA3-256 in
-//!   the `types` crate is a separate transaction hash, unrelated to signing)
-//! - Messages are signed with IOTA's PersonalMessage intent for security
-//! - Private keys use the IOTA format: `iotaprivkey1...`
-//! - Addresses are derived using IOTA's standard address derivation
+//!   message bytes. Keccak-256 appears only in [`sign_in`], where EIP-191 hashes the Ethereum
+//!   sign-in message; the SHA3-256 in the `types` crate is a separate transaction hash,
+//!   unrelated to signing
+//! - Messages are signed with the `PersonalMessage` intent for security
+//! - Private keys are bech32 strings of the scheme flag followed by the key bytes
+//! - Addresses are derived from the public key with the chain's standard address derivation
 //!
 //! # Modules
 //!
 //! - [`raw`]: Raw private key operations and utilities
 //! - [`keystore`]: File-based keystore management
+//! - [`sign_in`]: The wallet real.xyz derives when a user signs in with an external wallet
 //!
 //! # Main Types
 //!
 //! - [`Signer`]: Unified interface for cryptographic signing (enum wrapping RawSigner or Keystore)
+//! - [`MnemonicSigner`]: A signer restored from BIP-39 words, which keeps the words
 //! - [`raw::RawSigner`]: Direct private key signing operations (not re-exported at the crate root)
 //! - [`keystore::Keystore`]: File-based keystore for managing keys with aliases (not re-exported at the crate root)
 //! - [`verify_message_signature`]: Function to verify message signatures
@@ -88,7 +114,11 @@ use raw::RawSigner;
 use serde::Serialize;
 pub(crate) mod intent;
 pub mod keystore;
+mod mnemonic;
 pub mod raw;
+pub mod sign_in;
+
+pub use mnemonic::{InvalidMnemonic, MnemonicSigner};
 
 /// A unified interface for cryptographic signing operations.
 ///
@@ -127,14 +157,14 @@ pub enum Signer {
 }
 
 impl Signer {
-    /// Returns the IOTA address associated with this signer's public key.
+    /// Returns the address associated with this signer's public key.
     ///
-    /// The address is derived from the public key using IOTA's standard address
+    /// The address is derived from the public key using the chain's standard address
     /// derivation algorithm.
     ///
     /// # Returns
     ///
-    /// A string representation of the IOTA address (e.g., "0x123abc...")
+    /// A string representation of the address (e.g., "0x123abc...")
     ///
     /// # Examples
     ///
@@ -179,8 +209,8 @@ impl Signer {
 
     /// Signs a message using this signer's private key.
     ///
-    /// The message is wrapped in IOTA's PersonalMessage intent, BCS-encoded and hashed with
-    /// blake2b256; the Ed25519 key signs that digest. This matches IOTA's own signature
+    /// The message is wrapped in the `PersonalMessage` intent, BCS-encoded and hashed with
+    /// blake2b256; the Ed25519 key signs that digest. This matches the chain's own signature
     /// verification and domain-separates the signature from other intent scopes.
     ///
     /// # Arguments
@@ -210,21 +240,21 @@ impl Signer {
         }
     }
 
-    /// Signs a serializable message with a custom IOTA intent.
+    /// Signs a serializable message with a custom intent.
     ///
     /// This is an advanced signing method that allows you to specify a custom intent
     /// for the signature, rather than using the default PersonalMessage intent.
     /// This is useful for signing transactions, smart contract calls, or other
-    /// IOTA-specific operations that require specific intent scopes.
+    /// on-chain operations that require specific intent scopes.
     ///
     /// # Arguments
     ///
     /// * `msg` - Any serializable value to sign
-    /// * `intent` - The IOTA intent to use for signing (defines app_id, scope, and version)
+    /// * `intent` - The intent to use for signing (defines app_id, scope, and version)
     ///
     /// # Returns
     ///
-    /// An `iota_sdk_types::SimpleSignature` containing the cryptographic signature
+    /// A `SimpleSignature` containing the cryptographic signature
     ///
     /// # Examples
     ///
@@ -295,14 +325,14 @@ impl From<&Signer> for Signer {
 
 /// Verifies a message signature against a given address.
 ///
-/// This function performs cryptographic verification of a message signature using IOTA's
+/// This function performs cryptographic verification of a message signature using the chain's
 /// signature verification system. It rebuilds the PersonalMessage intent message, hashes its
 /// BCS encoding with blake2b256, and checks that the signature over that digest was produced
 /// by the private key corresponding to the given address.
 ///
 /// # Arguments
 ///
-/// * `address` - The IOTA address string that should have signed the message
+/// * `address` - The address string that should have signed the message
 /// * `message` - The original message that was signed
 /// * `signature` - The base64-encoded signature to verify
 ///
@@ -313,7 +343,7 @@ impl From<&Signer> for Signer {
 ///
 /// # Security
 ///
-/// This function uses IOTA's secure verification with PersonalMessage intent, which helps
+/// This function uses the chain's secure verification with PersonalMessage intent, which helps
 /// prevent signature replay attacks across different contexts.
 ///
 /// # Examples
@@ -336,8 +366,8 @@ impl From<&Signer> for Signer {
 /// # Errors
 ///
 /// This function will return an error if:
-/// - The address string is not a valid IOTA address format
-/// - The signature string is not valid base64 or not a valid IOTA signature
+/// - The address string is not a valid address
+/// - The signature string is not valid base64 or not a valid signature
 /// - The signature uses a scheme other than Ed25519 (secp256k1 and secp256r1 are rejected)
 /// - The signature was not created by the private key corresponding to the address
 /// - The message doesn't match what was originally signed
@@ -370,10 +400,10 @@ pub fn verify_message_signature(
     return Ok(true);
 }
 
-/// Extracts the IOTA address from any type that can be converted to a Signer.
+/// Extracts the address from any type that can be converted to a Signer.
 ///
 /// This is a convenience function that accepts various input types (private key strings,
-/// RawSigner, Keystore, etc.) and returns the corresponding IOTA address.
+/// RawSigner, Keystore, etc.) and returns the corresponding address.
 ///
 /// # Arguments
 ///
@@ -381,7 +411,7 @@ pub fn verify_message_signature(
 ///
 /// # Returns
 ///
-/// * `Ok(String)` - The IOTA address corresponding to the signer's public key
+/// * `Ok(String)` - The address corresponding to the signer's public key
 /// * `Err(_)` - Failed to parse the input or extract the address
 ///
 /// # Examples

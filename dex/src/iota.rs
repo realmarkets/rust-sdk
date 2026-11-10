@@ -1,15 +1,16 @@
-//! IOTA blockchain client utilities and network configuration.
+//! Network selection and the gRPC client the rest of this crate reaches the
+//! chain with.
 //!
-//! This module provides convenient abstractions for connecting to different IOTA networks
-//! and initializing the IOTA SDK client.
+//! The client reads a fullnode directly, so what it returns is as fresh as
+//! the node's own state.
 
-use iota_sdk::{IotaClient, IotaClientBuilder};
+pub use ptbs::grpc::GrpcClient;
 use serde::{Deserialize, Serialize};
 
-/// IOTA network configuration enum.
+/// Network configuration enum.
 ///
-/// Specifies which IOTA network to connect to. Supports standard networks
-/// (devnet, testnet, mainnet) as well as custom RPC endpoints.
+/// Specifies which network to connect to. Supports standard networks
+/// (devnet, testnet, mainnet) as well as custom gRPC endpoints.
 ///
 /// # Examples
 ///
@@ -20,34 +21,34 @@ use serde::{Deserialize, Serialize};
 /// let devnet = IotaNetwork::Devnet;
 ///
 /// // Connect to custom network
-/// let custom = IotaNetwork::Custom("https://my-node.example.com:9000".to_string());
+/// let custom = IotaNetwork::Custom("https://grpc.my-node.example.com:443".to_string());
 /// ```
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum IotaNetwork {
-    /// IOTA development network (for testing and development)
+    /// Development network (for testing and development)
     Devnet,
-    /// IOTA test network (public testnet)
+    /// Test network (public testnet)
     Testnet,
-    /// IOTA main network (production)
+    /// Main network (production)
     Mainnet,
-    /// Custom RPC endpoint URL
+    /// Custom gRPC endpoint URL
     Custom(String),
 }
 
-/// Builds and initializes an IOTA client for the specified network.
+/// Builds a gRPC client for the specified network.
 ///
-/// Creates a configured `IotaClient` instance connected to the chosen network.
 /// The client is used for all blockchain interactions including reading state,
-/// submitting transactions, and querying objects.
+/// submitting transactions, and querying objects. It connects on first use, so
+/// an unreachable node surfaces on the first call rather than here.
 ///
 /// # Arguments
 ///
-/// * `network_url` - The IOTA network to connect to
+/// * `network_url` - The network to connect to
 ///
 /// # Returns
 ///
-/// * `Ok(IotaClient)` - Initialized client connected to the network
-/// * `Err` - Network connection failed or invalid configuration
+/// * `Ok(GrpcClient)` - Client for the network
+/// * `Err` - The custom URL is not a valid URI
 ///
 /// # Examples
 ///
@@ -60,20 +61,20 @@ pub enum IotaNetwork {
 ///
 /// // Connect to custom network
 /// let custom_client = build_iota_client(
-///     &IotaNetwork::Custom("https://my-node.example.com:9000".to_string())
+///     &IotaNetwork::Custom("https://grpc.my-node.example.com:443".to_string())
 /// ).await?;
 /// # Ok(())
 /// # }
 /// ```
-pub async fn build_iota_client(network_url: &IotaNetwork) -> anyhow::Result<IotaClient> {
+pub async fn build_iota_client(network_url: &IotaNetwork) -> anyhow::Result<GrpcClient> {
     use IotaNetwork::*;
 
     let client = match network_url {
-        Devnet => IotaClientBuilder::default().build_devnet().await?,
-        Testnet => IotaClientBuilder::default().build_testnet().await?,
-        Mainnet => IotaClientBuilder::default().build_mainnet().await?,
-        Custom(url) => IotaClientBuilder::default().build(url).await?,
+        Devnet => GrpcClient::new_devnet()?,
+        Testnet => GrpcClient::new_testnet()?,
+        Mainnet => GrpcClient::new_mainnet()?,
+        Custom(url) => GrpcClient::new(url.as_str())?,
     };
 
-    Ok(client)
+    return Ok(client);
 }

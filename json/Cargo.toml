@@ -13,6 +13,7 @@ avx512 = ["sonic", "sonic-rs/avx512"]
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }
 sonic-rs = { workspace = true, optional = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true

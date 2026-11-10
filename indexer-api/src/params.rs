@@ -13,12 +13,17 @@ pub type ListMarketTickersParams = PaginatedParams<NoFilters>;
 pub type ListDepositsParams = PaginatedParams<ListDepositsFilters>;
 pub type ListWithdrawalsParams = PaginatedParams<ListWithdrawalsFilters>;
 pub type ListFundingPaymentsParams = PaginatedParams<ListFundingPaymentsFilters>;
+pub type ListFundingRatesHistoricParams = PaginatedParams<ListFundingRatesHistoricFilters>;
 pub type ListAssetsParams = PaginatedParams<ListAssetsFilters>;
 pub type ListInsuranceSourcesParams = PaginatedParams<ListInsuranceSourcesFilters>;
 pub type ListInsuranceSourceCooldownsParams = PaginatedParams<ListInsuranceSourceCooldownsFilters>;
 pub type ListMarketInsuranceCooldownsParams = PaginatedParams<ListMarketInsuranceCooldownsFilters>;
 pub type ListLiquidationsParams = PaginatedParams<ListLiquidationsFilters>;
 pub type ListContractsPackageHistoryParams = PaginatedParams<NoFilters>;
+
+/// The indexer's upper bound on `p[s]`. The `list_all_*` helpers request it so a full listing
+/// takes the fewest round trips.
+pub(crate) const MAX_PAGE_SIZE: u32 = 1_000;
 
 pub(crate) trait ToQueryString {
     fn to_query_string(&self) -> String;
@@ -150,7 +155,7 @@ macro_rules! paginate {
         let mut next_cursor: Option<String> = None;
         loop {
             let mut params = <$params_type>::new();
-            params.page_size = Some(100);
+            params.page_size = Some($crate::params::MAX_PAGE_SIZE);
             if let Some(ref f) = $filters {
                 params.filters = f.clone();
             }
@@ -961,6 +966,33 @@ impl ToQueryString for ListFundingPaymentsFilters {
         }
         if let Some(v) = self.filter_updated_at_to_ms {
             params.push(format!("f[updated_at_to_ms]={}", v));
+        }
+        return params.join("&");
+    }
+}
+
+/// Filter parameters for listing the funding rate history
+#[derive(Debug, Default, Clone)]
+pub struct ListFundingRatesHistoricFilters {
+    pub filter_market_ids: Option<Vec<String>>,
+}
+
+impl ListFundingRatesHistoricFilters {
+    pub fn new() -> Self {
+        return Self::default();
+    }
+
+    pub fn market_ids(mut self, v: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.filter_market_ids = Some(v.into_iter().map(|i| i.into()).collect());
+        self
+    }
+}
+
+impl ToQueryString for ListFundingRatesHistoricFilters {
+    fn to_query_string(&self) -> String {
+        let mut params = Vec::new();
+        if let Some(ref v) = self.filter_market_ids {
+            params.push(format!("f[market_ids]={}", v.join(",")));
         }
         return params.join("&");
     }

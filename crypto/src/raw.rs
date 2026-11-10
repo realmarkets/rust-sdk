@@ -1,17 +1,17 @@
-//! Raw cryptographic operations for IOTA key management and signing.
+//! Raw cryptographic operations for key management and signing.
 //!
 //! This module provides low-level cryptographic functions for:
 //! - Key pair generation and management
 //! - Message signing using Ed25519
 //! - Address derivation from public keys
-//! - Bech32 encoding for private keys (`iotaprivkey1...`); base64 for public keys and signatures
+//! - Bech32 encoding for private keys; base64 for public keys and signatures
 //!
 //! # Key Features
 //!
-//! - **Ed25519 Signatures**: Using IOTA's signature scheme
+//! - **Ed25519 Signatures**: Using the chain's signature scheme
 //! - **blake2b256 Digest**: signatures cover blake2b256 over the BCS-encoded intent message
-//! - **IOTA Personal Message Intent**: Proper intent wrapping for security
-//! - **Key Encoding**: private keys are bech32 (`iotaprivkey1...`); public keys and signatures are base64
+//! - **Personal Message Intent**: Proper intent wrapping for security
+//! - **Key Encoding**: private keys are bech32; public keys and signatures are base64
 //!
 //! # Examples
 //!
@@ -34,18 +34,18 @@ use serde::Serialize;
 
 use crate::intent::sign_intent;
 
-/// A wrapper around IOTA's key pair for signing operations.
+/// A wrapper around a key pair for signing operations.
 ///
 /// Provides methods for key management, address derivation, and message signing.
 #[derive(Debug, Clone)]
 pub struct RawSigner(SimpleKeypair);
 
 impl RawSigner {
-    /// Creates a new `RawSigner` from a bech32-encoded IOTA private key string.
+    /// Creates a new `RawSigner` from a bech32-encoded private key string.
     ///
     /// # Arguments
     ///
-    /// * `input` - Bech32 private key with the `iotaprivkey` prefix (e.g., "iotaprivkey1qrsd...")
+    /// * `input` - Bech32-encoded private key
     ///
     /// # Returns
     ///
@@ -66,6 +66,10 @@ impl RawSigner {
         return Ok(RawSigner(keypair));
     }
 
+    pub(crate) fn from_keypair(keypair: SimpleKeypair) -> RawSigner {
+        return RawSigner(keypair);
+    }
+
     /// Generates a new random Ed25519 key pair.
     ///
     /// # Returns
@@ -82,7 +86,7 @@ impl RawSigner {
     /// ```
     pub fn random() -> anyhow::Result<RawSigner> {
         let (_, kp, _, _) =
-            iota_keys::key_derive::generate_new_key(SignatureScheme::Ed25519, None, None)?;
+            keyring::key_derive::generate_new_key(SignatureScheme::Ed25519, None, None)?;
 
         return Ok(RawSigner(kp));
     }
@@ -91,7 +95,7 @@ impl RawSigner {
     ///
     /// # Returns
     ///
-    /// * `Ok(String)` - Bech32 private key with the `iotaprivkey` prefix
+    /// * `Ok(String)` - Bech32-encoded private key
     /// * `Err` - Encoding failed
     pub fn privkey(&self) -> anyhow::Result<String> {
         let privkey = self
@@ -108,7 +112,7 @@ impl RawSigner {
         return pubkey.to_base64();
     }
 
-    /// Derives the IOTA address from the public key.
+    /// Derives the address from the public key.
     ///
     /// # Returns
     ///
@@ -119,7 +123,7 @@ impl RawSigner {
         return address.to_string();
     }
 
-    /// Signs a message using Ed25519 with IOTA personal message intent.
+    /// Signs a message using Ed25519 with the personal message intent.
     ///
     /// The signed digest is blake2b256 over the BCS encoding of the intent message.
     ///
@@ -148,20 +152,20 @@ impl RawSigner {
         return signature.to_base64();
     }
 
-    /// Signs a serializable message with a custom IOTA intent.
+    /// Signs a serializable message with a custom intent.
     ///
     /// This is an advanced signing method that allows you to specify a custom intent
     /// for the signature. This is useful for signing transactions, smart contract calls,
-    /// or other IOTA-specific operations that require specific intent scopes.
+    /// or other on-chain operations that require specific intent scopes.
     ///
     /// # Arguments
     ///
     /// * `msg` - Any serializable value to sign
-    /// * `intent` - The IOTA intent to use for signing
+    /// * `intent` - The intent to use for signing
     ///
     /// # Returns
     ///
-    /// An `iota_sdk_types::SimpleSignature`
+    /// A `SimpleSignature`
     ///
     /// # Example
     ///
@@ -200,7 +204,7 @@ impl RawSigner {
 ///
 /// # Returns
 ///
-/// * `Ok(String)` - Bech32 private key with the `iotaprivkey` prefix (e.g., "iotaprivkey1qrsd...")
+/// * `Ok(String)` - Bech32-encoded private key
 /// * `Err` - Key generation failed
 ///
 /// # Example
@@ -209,11 +213,11 @@ impl RawSigner {
 /// use crypto::raw::random_private_key;
 ///
 /// let privkey = random_private_key().unwrap();
-/// assert!(privkey.starts_with("iotaprivkey1"));
+/// assert!(crypto::raw::RawSigner::new(&privkey).is_ok());
 /// ```
 pub fn random_private_key() -> anyhow::Result<String> {
     let (_, kp, _, _) =
-        iota_keys::key_derive::generate_new_key(SignatureScheme::Ed25519, None, None)?;
+        keyring::key_derive::generate_new_key(SignatureScheme::Ed25519, None, None)?;
     let privkey = kp.to_bech32().map_err(|e| anyhow::format_err!("{}", e))?;
 
     return Ok(privkey);
@@ -223,7 +227,7 @@ pub fn random_private_key() -> anyhow::Result<String> {
 ///
 /// # Arguments
 ///
-/// * `privkey` - Bech32 private key with the `iotaprivkey` prefix
+/// * `privkey` - Bech32-encoded private key
 ///
 /// # Returns
 ///
@@ -247,13 +251,13 @@ pub fn extract_address(privkey: &str) -> anyhow::Result<(String, String)> {
     return Ok((pubkey.to_base64(), address.to_string()));
 }
 
-/// Signs a message using a private key with Ed25519 and IOTA personal message intent.
+/// Signs a message using a private key with Ed25519 and the personal message intent.
 ///
 /// The signed digest is blake2b256 over the BCS encoding of the intent message.
 ///
 /// # Arguments
 ///
-/// * `privkey` - Bech32 private key with the `iotaprivkey` prefix
+/// * `privkey` - Bech32-encoded private key
 /// * `message` - The message to sign
 ///
 /// # Returns

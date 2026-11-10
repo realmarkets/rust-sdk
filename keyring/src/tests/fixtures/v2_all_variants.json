@@ -1,0 +1,49 @@
+{
+  "version": 2,
+  "keys": [
+    {
+      "alias": "my-aa",
+      "address": "0x1111111111111111111111111111111111111111111111111111111111111111",
+      "key": {
+        "type": "account",
+        "value": "0x1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    },
+    {
+      "alias": "xenodochial-amethyst",
+      "address": "0x6a0e268bfec6dc7da4ab9b8af60e345a55f5cc34793f1d9c21f7f8faee6f4b68",
+      "key": {
+        "type": "external",
+        "value": {
+          "source": "ledger",
+          "derivation_path": "m/44'/4218'/0'/0'/0'",
+          "public_key_base64_with_flag": "AA2itppp6zFjp9f6onzcTSyDbp8KymT2gCpQAHj7KL+o"
+        }
+      }
+    },
+    {
+      "alias": "r1",
+      "address": "0x779a63b28528210a5ec6c4af5a70382fa3f0c2d3f98dcbe4e3a4ae2f8c39cc9c",
+      "key": {
+        "type": "key_pair",
+        "value": "iotaprivkey1qtt65ua2lhal76zg4cxd6umdqynv2rj2gzrntp5rwlnyj370jg3pwtqlwdn"
+      }
+    },
+    {
+      "alias": "ed",
+      "address": "0x80ebb793af9b40569ed2c3be16e5bd76358997e28cc35ff48681157224c8b038",
+      "key": {
+        "type": "key_pair",
+        "value": "iotaprivkey1qzwant3kaegmjy4qxex93s0jzvemekkjmyv3r2sjwgnv2y479pgsyj3mjxj"
+      }
+    },
+    {
+      "alias": "k1",
+      "address": "0x8520d58dde1ab268349b9a46e5124ae6fe7e4c61df4ca2bc9c97d3c4d07b0b55",
+      "key": {
+        "type": "key_pair",
+        "value": "iotaprivkey1q8cy2ll8a0dmzzzwn9zavrug0qf47cyuj6k2r4r6rnjtpjhrdh52vpegd4f"
+      }
+    }
+  ]
+}

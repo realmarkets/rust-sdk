@@ -453,14 +453,14 @@ pub struct MarketTicker {
     pub prev_price_24h: Option<Decimal>,
     #[serde(alias = "pc24h")]
     pub price_change_24h: Option<Decimal>,
-    /// Next perpetual funding rate as a fraction
+    /// Next perpetual funding rate as a fraction; `None` before the first funding update
     #[serde(alias = "pnfr")]
     pub perp_next_funding_rate: Option<Decimal>,
-    /// Timestamp of the next funding settlement
+    /// Timestamp of the next funding settlement; `None` before the first funding update
     #[serde(default, alias = "pnft_ms")]
     pub perp_next_funding_time_ms: Option<u64>,
-    /// On-chain status bitset. Bit 0 suspends new funding staging and nulls
-    /// `perp_next_funding_rate` and `perp_next_funding_time_ms`.
+    /// On-chain status bitset. Bit 0 suspends funding: the next funding fields keep the
+    /// estimate, but the chain charges no funding until the bit clears.
     #[serde(default, alias = "ss")]
     pub sequencer_status: u32,
     /// Scheduled next effective trading mode, if a transition is pending
@@ -510,20 +510,28 @@ pub struct Account {
     pub account_object_id: String,
     #[serde(alias = "ca_ms")]
     pub created_at_ms: u64,
+    /// Time of the transaction that registered the account in the account registry; `None`
+    /// for an account that is not registered
+    #[serde(default, alias = "rga_ms")]
+    pub registered_at_ms: Option<u64>,
     #[serde(alias = "ua_ms")]
     pub updated_at_ms: u64,
-    /// Owner wallet address
+    /// Owner wallet address; `None` for an account that is not registered
     #[serde(alias = "a")]
     pub address: Option<String>,
-    /// Sub-account index under the owner address
-    #[serde(alias = "ai")]
-    pub account_index: String,
+    /// Sub-account index under the owner address; `None` for an account that is not
+    /// registered
+    #[serde(default, alias = "ai")]
+    pub account_index: Option<String>,
     /// Full on-chain identifier of the settlement asset
     #[serde(alias = "as")]
     pub asset_id: String,
     /// Balance free to place new orders or withdraw
     #[serde(alias = "ab")]
     pub available_balance: Option<Decimal>,
+    /// One entry per collateral asset; today there is one, for `asset_id`
+    #[serde(default, alias = "sb")]
+    pub settled_balances: Vec<SettledBalance>,
     /// Total account equity (balance + unrealised PnL)
     #[serde(alias = "e")]
     pub equity: Option<Decimal>,
@@ -547,24 +555,39 @@ pub struct Account {
     /// Whether the account may currently place trades
     #[serde(alias = "ct")]
     pub can_trade: bool,
-    /// Whether this account is exempt from rate limiting. Not present in WebSocket events.
-    #[serde(default)]
+    /// Whether this account is exempt from rate limiting
+    #[serde(default, alias = "irle")]
     pub is_rate_limit_exempt: bool,
-    /// Whether this account is exempt from deposit limits (VIP account). Not present in WebSocket events.
-    #[serde(default)]
+    /// Whether this account is exempt from deposit limits (VIP account)
+    #[serde(default, alias = "idle")]
     pub is_deposit_limit_exempt: bool,
+    /// Whether this account is exempt from the per-account withdrawal safeguard limits (VIP
+    /// account)
+    #[serde(default, alias = "iwse")]
+    pub is_withdrawal_safeguard_exempt: bool,
     /// Whether order indexing for this account is suspended
     #[serde(alias = "ois")]
     pub order_indexing_suspended: bool,
-    /// Number of this account's withdrawals currently in the on-chain cooldown queue
+    /// Number of this account's withdrawal requests in the on-chain request list, which covers
+    /// the asset's `account_withdrawal_count_window_ms`: a count per window, not in total. An
+    /// expired request stays in the list until the next on-chain prune. The asset's
+    /// `account_withdrawal_count_limit` applies to it. 0 until the indexer sees the account's
+    /// withdrawal safeguard.
     #[serde(alias = "cwc")]
     pub cooldown_withdrawal_count: i64,
     /// Sum of this account's withdrawals currently in the on-chain cooldown queue
     #[serde(alias = "cwt")]
     pub cooldown_withdrawal_total: Decimal,
-    /// True when the account-side cooldown limit has been reached and the account is not VIP-exempt
-    #[serde(alias = "swd")]
-    pub account_withdrawal_delay_active: bool,
+    /// True when the account is not VIP-exempt and `cooldown_withdrawal_count` has reached the
+    /// asset's `account_withdrawal_count_limit`. Indexed state: request-time pruning can change
+    /// the classification of the next withdrawal.
+    #[serde(alias = "awcda")]
+    pub account_withdrawal_count_delay_active: bool,
+    /// True when the account is not VIP-exempt and `cooldown_withdrawal_total` has reached the
+    /// asset's `account_cumulative_withdrawal_limit`. Indexed state: request-time pruning can
+    /// change the classification of the next withdrawal.
+    #[serde(alias = "acwda")]
+    pub account_cumulative_withdrawal_delay_active: bool,
     /// Timestamp when real-time computed values were last refreshed
     #[serde(default, alias = "vra_ms")]
     pub values_refreshed_at_ms: Option<u64>,
@@ -574,6 +597,16 @@ pub struct Account {
     pub taker_fee_tier: u64,
     #[serde(alias = "dt")]
     pub discount_tier: u64,
+}
+
+/// An account's settled balance in one collateral asset: cross collateral, plus the funds
+/// locked for withdrawal, plus every isolated margin pool. Unrealised PnL is not included.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SettledBalance {
+    #[serde(alias = "as")]
+    pub asset_id: String,
+    #[serde(alias = "b")]
+    pub balance: Decimal,
 }
 
 /// List assets response containing assets and pagination info
@@ -613,12 +646,18 @@ pub struct Asset {
     pub account_cumulative_withdrawal_limit_window_ms: Option<i64>,
     /// Delay (ms) imposed on withdrawals once the per-account cumulative limit is breached
     pub account_cumulative_withdrawal_limit_breach_delay_ms: Option<i64>,
-    /// Number of this asset's withdrawals currently in the on-chain cooldown queue
+    /// Number of withdrawal requests in this asset vault's on-chain request queue, the count
+    /// `vault_withdrawal_count_limit` applies to. 0 until the indexer sees the vault's
+    /// request-count safeguard.
     pub cooldown_withdrawal_count: i64,
     /// Sum of this asset's withdrawals currently in the on-chain cooldown queue
     pub cooldown_withdrawal_total: Decimal,
-    /// True when the vault cumulative-withdrawal limit has been breached and its delay is active
-    pub vault_withdrawal_limit_delay_active: bool,
+    /// True when `cooldown_withdrawal_count` has reached `vault_withdrawal_count_limit`. Indexed
+    /// state: request-time pruning can change the classification of the next withdrawal.
+    pub vault_withdrawal_count_delay_active: bool,
+    /// True when `cooldown_withdrawal_total` has reached `vault_cumulative_withdrawal_limit`.
+    /// Indexed state: request-time pruning can change the classification of the next withdrawal.
+    pub vault_cumulative_withdrawal_delay_active: bool,
     /// Cap on the number of withdrawal requests against this vault within the count window.
     /// `None` when uncapped; zero disables the vault-level count gate.
     pub vault_withdrawal_count_limit: Option<i64>,
@@ -676,6 +715,8 @@ pub struct Position {
     pub direction: Option<Direction>,
     #[serde(alias = "aep")]
     pub average_entry_price: Option<Decimal>,
+    /// The initial margin ratio the DEX applies to the position: the greater of the IMR the
+    /// account set and the market's current IMR
     #[serde(alias = "cimr")]
     pub current_imr: Option<Decimal>,
     #[serde(alias = "cmm")]
@@ -777,10 +818,6 @@ pub struct Market {
     pub settlement_asset: String,
     /// Current oracle/index price
     pub price: Decimal,
-    /// On-chain status bitset. Bit 0 suspends new funding staging and nulls the ticker's
-    /// funding rate and time.
-    #[serde(default)]
-    pub sequencer_status: u32,
     /// Order-validation rules (precision, tick/lot sizes, trading bound, maker shield)
     pub order_rules: MarketOrderRules,
     /// Fee schedule applied to fills
@@ -921,6 +958,11 @@ pub struct LiquidityStep {
 /// Market trading mode information
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarketTradingMode {
+    /// On-chain status bitset. Bit 0 suspends funding: the next funding fields keep the
+    /// estimate, but the chain charges no funding until the bit clears. An indexer from before
+    /// the field moved here carried it on [`Market`] and reads as 0.
+    #[serde(default)]
+    pub sequencer_status: u32,
     /// Effective trading mode that applies to this market right now
     pub effective_mode: TradingMode,
     /// Slot driven by the DEX global trading-mode schedule
@@ -1445,6 +1487,9 @@ pub struct Withdrawal {
     pub status: WithdrawalStatus,
     #[serde(alias = "cs")]
     pub completion_status: Option<WithdrawalCompletionStatus>,
+    /// REST only: WebSocket withdrawal events do not carry it
+    #[serde(default)]
+    pub node_state_version: String,
 }
 
 /// List funding payments response containing funding payments and pagination info
@@ -1479,6 +1524,42 @@ pub struct FundingPayment {
     #[serde(alias = "ua_ms")]
     pub updated_at_ms: u64,
     #[serde(default, alias = "sv")]
+    pub node_state_version: String,
+}
+
+/// List funding rate history response containing settlements and pagination info
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ListFundingRatesHistoricResponse {
+    pub data: Vec<SettledFundingRate>,
+    pub pagination: Pagination,
+}
+
+/// One funding settlement of one market: the rate, the inputs it was computed from, and the
+/// funding configuration in force at that settlement.
+///
+/// A settlement funds every market of its source in one event, so `id` repeats across the rows
+/// it produces; `(id, market_id)` identifies one row. A funding-suspended market gets no row for
+/// a settlement, and a crank that crosses several window boundaries settles once, so the
+/// skipped intervals have none either.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SettledFundingRate {
+    /// The settlement event, shared by every market its source funds in the same event
+    pub id: String,
+    pub tx_digest: String,
+    pub market_id: String,
+    /// Per-settlement rate, already divided by `config.window_length_factor`
+    pub funding_rate: Decimal,
+    /// Pooled premium average over the averaging window
+    pub premium_average: Decimal,
+    /// Premium average after the delta-band correction, before the upper bound and the
+    /// division by `window_length_factor`
+    pub corrected_premium: Decimal,
+    /// On-chain clock time of the settling crank; at or before `created_at_ms`
+    pub settled_at_ms: u64,
+    /// The funding configuration in force at this settlement
+    pub config: MarketFunding,
+    /// Time of the checkpoint that holds the settling crank
+    pub created_at_ms: u64,
     pub node_state_version: String,
 }
 

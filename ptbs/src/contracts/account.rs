@@ -268,24 +268,29 @@ impl Account {
         return Ok(nonce);
     }
 
-    pub async fn finish_inspect(
+    /// Consumes the visitor for the cross group's stats and the visited positions' stats,
+    /// counting back in the collateral a pending withdrawal has locked, read at `vault`'s
+    /// decimals. Dev-inspect only.
+    pub async fn finish_inspect_v2(
         &self,
         builder: &mut TransactionBuilder,
         coin_type: &TypeTag,
         visitor: impl IntoArgument,
+        vault: impl IntoArgument,
     ) -> anyhow::Result<(Argument, Argument)> {
         let visitor_arg = builder.obj(visitor, true).await?;
+        let vault_arg = builder.obj(vault, false).await?;
 
         let mv = builder.command(Command::new_move_call(
             self.exchange_package_address,
             Identifier::new("account")?,
-            Identifier::new("finish_inspect")?,
+            Identifier::new("finish_inspect_v2")?,
             vec![coin_type.clone()],
-            vec![visitor_arg],
+            vec![visitor_arg, vault_arg],
         ));
 
         let Argument::Result(idx) = mv else {
-            unreachable!()
+            unreachable!("a move call's result is always `Argument::Result`")
         };
         return Ok((
             Argument::NestedResult(idx, 0),
@@ -831,23 +836,28 @@ impl Account {
         return Ok(());
     }
 
-    pub async fn expire_withdrawal(
+    /// Permissionless: unlocks the collateral the ticket `nonce` still locks once it has
+    /// expired, and releases its entry in `vault`'s queue. A nonce with no ticket is a no-op;
+    /// a ticket not yet expired aborts (`ETicketNotExpired`).
+    pub async fn expire_withdrawal_v2(
         &self,
         builder: &mut TransactionBuilder,
         coin_type: &TypeTag,
         account: impl IntoArgument,
+        vault: impl IntoArgument,
         nonce: impl IntoArgument,
     ) -> anyhow::Result<()> {
         let account_arg = builder.obj(account, true).await?;
+        let vault_arg = builder.obj(vault, true).await?;
         let nonce_arg = builder.pure(nonce)?;
         let clock_arg = builder.obj(self.clock_object_arg.clone(), false).await?;
 
         builder.command(Command::new_move_call(
             self.exchange_package_address,
             Identifier::new("account")?,
-            Identifier::new("expire_withdrawal")?,
+            Identifier::new("expire_withdrawal_v2")?,
             vec![coin_type.clone()],
-            vec![account_arg, nonce_arg, clock_arg],
+            vec![account_arg, vault_arg, nonce_arg, clock_arg],
         ));
 
         return Ok(());
@@ -894,6 +904,32 @@ impl Account {
             Identifier::new("realize_fee_change")?,
             vec![coin_type.clone()],
             vec![account_arg, exchange_arg, nonce_arg],
+        ));
+
+        return Ok(());
+    }
+
+    /// Realizes a staged fee override; `realize_fee_change` realizes only the tier and discount
+    /// changes. `market` must be the market the override was staged for.
+    pub async fn realize_fee_override(
+        &self,
+        builder: &mut TransactionBuilder,
+        coin_type: &TypeTag,
+        account: impl IntoArgument,
+        market: impl IntoArgument,
+        nonce: impl IntoArgument,
+    ) -> anyhow::Result<()> {
+        let account_arg = builder.obj(account, true).await?;
+        let exchange_arg = builder.obj(self.exchange_object_arg.clone(), false).await?;
+        let market_arg = builder.obj(market, false).await?;
+        let nonce_arg = builder.pure(nonce)?;
+
+        builder.command(Command::new_move_call(
+            self.exchange_package_address,
+            Identifier::new("account")?,
+            Identifier::new("realize_fee_override")?,
+            vec![coin_type.clone()],
+            vec![account_arg, exchange_arg, market_arg, nonce_arg],
         ));
 
         return Ok(());
