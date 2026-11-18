@@ -88,8 +88,15 @@ pub enum Report {
     /// Report for canceled orders, including all orders that were terminated.
     #[serde(rename = "cancel_order_receipt")]
     CancelOrderReport {
-        /// Details of all orders (regular and conditional) that were terminated
+        /// The orders (regular and conditional) terminated in the market the
+        /// request named. A request that named no market leaves it empty, its
+        /// `market` empty too.
         orders: OrdersTerminated,
+        /// A request that named no market: one entry per market it terminated
+        /// orders in, in market id order. Empty otherwise, and then left out
+        /// of the JSON, so a receipt for a single market reads as it always has.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        all_markets: Vec<OrdersTerminated>,
     },
     #[serde(rename = "liquidation_receipt")]
     LiquidationReport,
@@ -113,15 +120,18 @@ impl Report {
     ///
     /// # Returns
     ///
-    /// * Number of canceled orders if this is a `CancelOrderReport`
+    /// * Number of canceled orders if this is a `CancelOrderReport`, the
+    ///   requested market's and every `all_markets` entry's together
     /// * `0` for all other report types
     pub fn canceled_orders_count(&self) -> usize {
-        match self {
-            Report::CancelOrderReport { orders } => {
-                orders.order_ids.len() + orders.conditional_order_ids.len()
-            }
+        let terminated = |t: &OrdersTerminated| t.order_ids.len() + t.conditional_order_ids.len();
+        return match self {
+            Report::CancelOrderReport {
+                orders,
+                all_markets,
+            } => terminated(orders) + all_markets.iter().map(terminated).sum::<usize>(),
             _ => 0,
-        }
+        };
     }
 }
 

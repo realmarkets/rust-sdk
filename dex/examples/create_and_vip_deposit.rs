@@ -77,8 +77,11 @@ async fn main() -> Result<()> {
     let (details, tx_digest) = accounts.create(args.account_index).await?;
 
     println!("\n✓ Account created successfully!");
-    println!("  Account ID: {}", details.account_id);
-    println!("  Account Object ID: {}", details.account_object_id);
+    println!("  Account ID (for orders): {}", details.account_id);
+    println!(
+        "  Account Object ID (for deposits): {}",
+        details.account_object_id
+    );
     println!("  Manager Capability ID: {}", details.manager_cap_id);
     println!("  Account Index: {}", args.account_index);
     println!("  Transaction: {}", tx_digest);

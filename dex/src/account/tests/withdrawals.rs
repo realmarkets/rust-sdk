@@ -6,10 +6,11 @@ use ptbs::{
 };
 
 use super::{
-    ACCOUNT_OBJECT, ACCOUNT_STATIC, EXCHANGE_PACKAGE, OnlySubmission, Received, SOUL_BOUND,
+    ACCOUNT_OBJECT_ID, ACCOUNT_STATIC, EXCHANGE_PACKAGE, OnlySubmission, Received, SOUL_BOUND,
     account, accounts, deployed, exchange_entry, id_type, register, sender, shared, stable,
     struct_type,
 };
+use crate::account::AccountId;
 
 const MARKET_STATIC: ObjectId = ObjectId::new([0x40; 32]);
 const MARKET_OBJECT: ObjectId = ObjectId::new([0x41; 32]);
@@ -88,8 +89,8 @@ async fn a_withdrawal_visits_every_position_and_returns_the_ticket_nonce() {
 
     let (nonce, digest) = accounts
         .request_withdrawal(
-            &ACCOUNT_STATIC.to_string(),
-            &ACCOUNT_OBJECT.to_string(),
+            &AccountId::from_be_bytes(ACCOUNT_STATIC.into_bytes()),
+            &ACCOUNT_OBJECT_ID,
             &SOUL_BOUND.to_string(),
             300,
             &Address::new([0x77; 32]).to_string(),
@@ -141,8 +142,8 @@ async fn a_withdrawal_without_its_ticket_event_is_an_error() {
 
     let err = accounts
         .request_withdrawal(
-            &ACCOUNT_STATIC.to_string(),
-            &ACCOUNT_OBJECT.to_string(),
+            &AccountId::from_be_bytes(ACCOUNT_STATIC.into_bytes()),
+            &ACCOUNT_OBJECT_ID,
             &SOUL_BOUND.to_string(),
             300,
             &Address::new([0x77; 32]).to_string(),

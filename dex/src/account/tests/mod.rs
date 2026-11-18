@@ -16,7 +16,7 @@ use ptbs::{
 };
 use serde::Serialize;
 
-use super::{Accounts, AccountsConfig};
+use super::{AccountObjectId, Accounts, AccountsConfig};
 
 mod creation;
 mod deposits;
@@ -47,6 +47,9 @@ const COIN_METADATA: ObjectId = ObjectId::new([0x16; 32]);
 /// The registered account's objects.
 const ACCOUNT_STATIC: ObjectId = ObjectId::new([0x20; 32]);
 const ACCOUNT_OBJECT: ObjectId = ObjectId::new([0x21; 32]);
+/// [`ACCOUNT_OBJECT`] as the account calls take it.
+const ACCOUNT_OBJECT_ID: AccountObjectId =
+    AccountObjectId::from_be_bytes(ACCOUNT_OBJECT.into_bytes());
 const MANAGER_CAP: ObjectId = ObjectId::new([0x22; 32]);
 const SOUL_BOUND: ObjectId = ObjectId::new([0x23; 32]);
 

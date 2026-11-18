@@ -59,8 +59,9 @@ pub use builder::{IntoArgument, TransactionBuilder};
 pub use cache::{ObjectArgCache, ObjectArgCacheT, TransientCache};
 pub use contracts::{
     Coin, Collateral, Faucet, Fee, Insurance, Registry, SoulBound, abstract_source::AbstractSource,
-    account::Account, fixed18::Fixed18, funding::Funding, iota::Object, lazer_source::LazerSource,
-    market::Market, mock_source::MockSource,
+    account::Account, fixed18::Fixed18, funding::Funding, internal_source::InternalSource,
+    iota::Object, lazer_source::LazerSource, mark_source::MarkSource, market::Market,
+    mock_source::MockSource,
 };
 pub use dynamic_field::{DynamicFieldInfo, DynamicFieldKind, DynamicFieldName};
 pub use grpc::{GrpcClient, IotaClientExt};

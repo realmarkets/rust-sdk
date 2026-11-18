@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use clap::Parser;
 use crypto::Signer;
 use dex::{
-    account::{Accounts, AccountsConfig},
+    account::{AccountObjectId, Accounts, AccountsConfig},
     contracts_artifacts::Artifacts,
     iota::{IotaNetwork, build_iota_client},
 };
@@ -32,9 +32,10 @@ struct Args {
     #[arg(short, long)]
     private_key: String,
 
-    /// Account object ID to deposit into (0x...), as `create_account` prints it
+    /// Account object ID to deposit into (0x...), as `create_account` prints it;
+    /// not the account ID that orders take
     #[arg(short = 'o', long)]
-    account_object_id: String,
+    account_object_id: AccountObjectId,
 
     /// Amount to deposit in the coin's smallest unit
     #[arg(short = 'm', long)]

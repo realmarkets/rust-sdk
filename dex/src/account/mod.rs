@@ -8,6 +8,11 @@
 //! the `ptbs::mirrors` of their Move structs; a transaction is executed on the node and answered
 //! only once the node has checkpointed it, so the reads that follow it see its effects.
 //!
+//! An account has two ids, and this module's calls take the object one: [`AccountObjectId`],
+//! the account's current on-chain object. Orders, cancels and margin changes go to the
+//! sequencer under the other, the static [`AccountId`]. [`AccountDetails`] carries both; see
+//! [the two account ids](types::core#the-two-account-ids).
+//!
 //! # Examples
 //!
 //! For complete, runnable examples, see:
@@ -35,8 +40,8 @@ mod submit;
 #[cfg(test)]
 mod tests;
 
-pub type AccountId = String;
-pub type AccountObjectId = String;
+pub use types::core::{AccountId, AccountObjectId};
+
 pub type ManagerCapId = String;
 pub type TransactionDigest = String;
 
@@ -44,8 +49,15 @@ pub type TransactionDigest = String;
 ///
 /// Returned by [`Accounts::create`] and [`Accounts::get_existing`] to provide
 /// the identifiers needed for subsequent operations (deposits, trading, etc.).
+/// The account's two ids are not interchangeable; see
+/// [the two account ids](types::core#the-two-account-ids).
 pub struct AccountDetails {
+    /// The account's static id: the `account` every sequencer command (order,
+    /// cancel, margin change) takes.
     pub account_id: AccountId,
+    /// The account's current on-chain object: what [`Accounts::deposit`],
+    /// [`Accounts::account_balance`] and the other DEX calls take. Never a
+    /// sequencer command's `account`.
     pub account_object_id: AccountObjectId,
     /// The `SoulBound<ManagerCap>` wrapping the account's cap, which
     /// [`Accounts::request_withdrawal`] borrows it from.
@@ -266,8 +278,8 @@ impl AccountsConfig {
 /// // Create a new account
 /// let (details, tx_digest) = accounts.create(0).await?;
 ///
-/// // Deposit funds into an existing account
-/// let tx_digest = accounts.deposit("0xaccount...", 1_000_000).await?;
+/// // Deposit into it: deposits take the account object id
+/// let tx_digest = accounts.deposit(&details.account_object_id, 1_000_000).await?;
 /// # Ok(())
 /// # }
 /// ```

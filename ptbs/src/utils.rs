@@ -1,6 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use iota_sdk_types::{Input, ObjectId, ObjectReference, SharedObjectReference};
+use types::core::AccountObjectId;
 
 /// called on every failed fetch attempt with the object id and attempt number
 pub type RetryHook = Arc<dyn Fn(&str, u32) + Send + Sync>;
@@ -55,6 +56,12 @@ impl IntoObjectId for &String {
     fn into_object_id(self) -> anyhow::Result<ObjectId> {
         use std::str::FromStr;
         ObjectId::from_str(self).map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
+impl IntoObjectId for &AccountObjectId {
+    fn into_object_id(self) -> anyhow::Result<ObjectId> {
+        return Ok(ObjectId::new(self.to_be_bytes()));
     }
 }
 

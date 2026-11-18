@@ -1,8 +1,9 @@
 //! Order cancellation API types and utilities for the matching engine.
 //!
 //! This module provides the data structures and functionality needed to cancel orders
-//! in the trading system. It supports canceling specific orders by ID or canceling
-//! all orders for an account in a given market.
+//! in the trading system. It supports canceling specific orders by ID, canceling
+//! all orders for an account in a given market, and canceling all of them in every
+//! market.
 //!
 //! # Key Features
 //!
@@ -37,6 +38,18 @@
 //!     .expect("Failed to build cancel order request");
 //! ```
 //!
+//! ## Cancel all orders for an account in every market
+//! ```rust
+//! use types::api::cancel_order::CancelOrderRequest;
+//!
+//! let request = CancelOrderRequest::builder()
+//!     .all_markets()
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
+//!     .build()
+//!     .expect("Failed to build cancel order request");
+//! assert_eq!(request.market, None);
+//! ```
+//!
 //! ## JSON serialization examples
 //!
 //! Cancel specific order (full field names):
@@ -69,9 +82,10 @@ use crate::core::{AccountId, MarketId};
 /// Request to cancel an existing order in the matching engine.
 ///
 /// This structure represents a request to cancel one or more orders for a specific account
-/// in a given market. Naming an order — by `order_id` or by `client_order_id` —
-/// cancels only that one. Only when **both** are absent does the request cancel
-/// every order the account holds in the market.
+/// in a given market, or in every market. Naming an order — by `order_id` or by
+/// `client_order_id` — cancels only that one, in the market named. Only when
+/// **both** are absent does the request cancel every order the account holds in
+/// the market, and with no market named either, in every market.
 ///
 /// # Field Aliases
 ///
@@ -123,10 +137,21 @@ use crate::core::{AccountId, MarketId};
 /// }
 /// ```
 ///
+/// ## Cancel every order for the account in every market (omit the market too)
+/// ```json
+/// {
+///   "account": "0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a"
+/// }
+/// ```
+///
+/// The receipt then names no market in `orders` and lists each market it
+/// cancelled in under `all_markets`.
+///
 /// # Validation
 ///
 /// The request will be validated to ensure:
-/// - The market field is not empty and the market exists (201 / 202)
+/// - The market field, when present, is not empty and the market exists (201 / 202)
+/// - A request naming an order names its market too (201)
 /// - The account field is not empty (203)
 /// - `order_id` and `client_order_id` are not both set (204)
 /// - `client_order_id`, when set, is not empty (205)
@@ -134,20 +159,27 @@ use crate::core::{AccountId, MarketId};
 pub struct CancelOrderRequest {
     /// The market identifier where the order should be canceled.
     ///
-    /// This field is required and must match an existing market in the system.
+    /// When present it must match an existing market in the system. Absent, the
+    /// request names no order and cancels the account's orders in every market.
     /// Can be provided using the alias "m" for compact serialization.
     #[serde(default)]
     #[serde(alias = "m")]
-    pub market: Arc<str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub market: Option<Arc<str>>,
 
+    /// `market` parsed, filled in when the payload is decoded: `None` exactly
+    /// when `market` is.
     #[serde(default)]
     #[serde(skip_serializing)]
-    pub market_id: MarketId,
+    pub market_id: Option<MarketId>,
 
-    /// The account identifier that owns the order(s) to be canceled.
+    /// The [`AccountId`] of the account that owns the order(s) to be canceled: its
+    /// static id, not its [`AccountObjectId`](crate::core::AccountObjectId).
     ///
-    /// This field is required and identifies which account's orders should be canceled.
-    /// Can be provided using the alias "sa" for compact serialization.
+    /// This field is required and identifies which account's orders should be canceled;
+    /// it must be an account of the transaction's `owner`, or the command is refused
+    /// with `SenderNotAllowed` (501). Can be provided using the alias "sa" for compact
+    /// serialization.
     #[serde(default)]
     #[serde(alias = "sa")]
     pub account: Arc<str>,
@@ -159,7 +191,8 @@ pub struct CancelOrderRequest {
     /// Optional specific order ID to cancel.
     ///
     /// If provided, only the order with this specific ID will be canceled.
-    /// If omitted (None), all orders for the account in the specified market will be canceled.
+    /// If omitted (None), all orders for the account in the specified market will be
+    /// canceled, or in every market when no market is specified.
     ///
     /// Accepts both string and numeric formats to handle large 128-bit integers that may
     /// exceed JSON's native number precision. Can be provided using the alias "oid".
@@ -428,7 +461,7 @@ where
 ///     .expect("Failed to build cancel order request");
 /// ```
 ///
-/// ## Building a request to cancel all orders for an account
+/// ## Building a request to cancel all orders for an account in a market
 /// ```rust
 /// use types::api::cancel_order::CancelOrderRequest;
 ///
@@ -438,9 +471,21 @@ where
 ///     .build()
 ///     .expect("Failed to build cancel order request");
 /// ```
+///
+/// ## Building a request to cancel all orders for an account in every market
+/// ```rust
+/// use types::api::cancel_order::CancelOrderRequest;
+///
+/// let request = CancelOrderRequest::builder()
+///     .all_markets()
+///     .account("0x0000000000000000000000000000000000000000000000000000000000000456")
+///     .build()
+///     .expect("Failed to build cancel order request");
+/// ```
 #[derive(Debug, Default)]
 pub struct CancelOrderRequestBuilder {
     market: Option<String>,
+    all_markets: bool,
     account: Option<String>,
     order_id: Option<u128>,
     client_order_id: Option<Arc<str>>,
@@ -452,13 +497,21 @@ pub enum CancelOrderRequestBuilderError {
     /// Indicates that a required field was not provided to the builder.
     ///
     /// Required fields for `CancelOrderRequest` are:
-    /// - `market`: The market identifier
-    /// - `account`: The account identifier
+    /// - `market`: The market identifier, unless `all_markets` was set
+    /// - `account`: The account's [`AccountId`]
     #[error("Missing required field: {field}")]
     MissingField { field: &'static str },
 
     #[error("Invalid field value: {field}: {value}")]
     InvalidFieldValue { field: &'static str, value: String },
+
+    /// Two fields were set that a request can't carry together: `all_markets`
+    /// with a `market`, an `order_id` or a `client_order_id`.
+    #[error("Conflicting fields: {field} and {other}")]
+    ConflictingFields {
+        field: &'static str,
+        other: &'static str,
+    },
 }
 
 impl CancelOrderRequestBuilder {
@@ -477,7 +530,8 @@ impl CancelOrderRequestBuilder {
 
     /// Sets the market identifier for the cancel order request.
     ///
-    /// This is a required field that specifies which market the order to be canceled is in.
+    /// This specifies which market the order to be canceled is in. It is required
+    /// unless [`all_markets()`](Self::all_markets) is set instead.
     ///
     /// # Arguments
     ///
@@ -497,14 +551,41 @@ impl CancelOrderRequestBuilder {
         self
     }
 
-    /// Sets the account identifier for the cancel order request.
+    /// Cancels every order the account holds in every market, in place of
+    /// naming a market.
+    ///
+    /// It is a request of its own: [`build()`](Self::build) refuses it beside a
+    /// [`market()`](Self::market), an [`order_id()`](Self::order_id) or a
+    /// [`client_order_id()`](Self::client_order_id). Leaving out both it and the
+    /// market stays a build error, so a forgotten market never widens a cancel.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use types::api::cancel_order::CancelOrderRequest;
+    ///
+    /// let request = CancelOrderRequest::builder()
+    ///     .all_markets()
+    ///     .account("0x0000000000000000000000000000000000000000000000000000000000000123")
+    ///     .build()
+    ///     .expect("Failed to build cancel order request");
+    /// assert_eq!(request.market, None);
+    /// ```
+    pub fn all_markets(mut self) -> Self {
+        self.all_markets = true;
+        return self;
+    }
+
+    /// Sets the account the cancel order request is for, by its [`AccountId`].
     ///
     /// This is a required field that specifies which account owns the order(s) to be canceled.
     ///
     /// # Arguments
     ///
     /// * `account` - the account id, `0x` and 64 lower-case hex digits; the sequencer refuses
-    ///   any other spelling, which [`build()`](Self::build) does not catch.
+    ///   any other spelling, which [`build()`](Self::build) does not catch. Not the account's
+    ///   [`AccountObjectId`](crate::core::AccountObjectId), which the sequencer refuses with
+    ///   `SenderNotAllowed` (501).
     ///
     /// # Examples
     ///
@@ -523,7 +604,8 @@ impl CancelOrderRequestBuilder {
     ///
     /// If this field is set, only the order with the specified ID will be canceled.
     /// If omitted **and** no `client_order_id` is set either, all orders for the
-    /// account in the specified market are canceled.
+    /// account in the specified market are canceled, or in every market with
+    /// [`all_markets()`](Self::all_markets).
     ///
     /// # Arguments
     ///
@@ -545,7 +627,9 @@ impl CancelOrderRequestBuilder {
     /// Sets the client-assigned order ID to cancel (optional).
     ///
     /// Alternative to `order_id`. If both are set, `build()` succeeds but the request
-    /// fails validation. If neither is set, all orders for the account are canceled.
+    /// fails validation. If neither is set, all orders for the account are canceled,
+    /// in the specified market or, with [`all_markets()`](Self::all_markets), in every
+    /// market.
     ///
     /// # Arguments
     ///
@@ -567,10 +651,12 @@ impl CancelOrderRequestBuilder {
     ///
     /// # Errors
     ///
-    /// Returns `CancelOrderRequestBuilderError::MissingField` if either the `market`
-    /// or `account` fields have not been set, and
-    /// `CancelOrderRequestBuilderError::InvalidFieldValue` if either does not parse
-    /// or the client order id is the empty string.
+    /// Returns `CancelOrderRequestBuilderError::MissingField` if the `account` has not
+    /// been set, or neither a `market` nor `all_markets`;
+    /// `CancelOrderRequestBuilderError::InvalidFieldValue` if either id does not parse
+    /// or the client order id is the empty string; and
+    /// `CancelOrderRequestBuilderError::ConflictingFields` if `all_markets` is set
+    /// beside a `market`, an `order_id` or a `client_order_id`.
     ///
     /// # Examples
     ///
@@ -592,16 +678,7 @@ impl CancelOrderRequestBuilder {
     /// assert!(result.is_err());
     /// ```
     pub fn build(self) -> Result<CancelOrderRequest, CancelOrderRequestBuilderError> {
-        let market = self
-            .market
-            .ok_or(CancelOrderRequestBuilderError::MissingField { field: "market" })?;
-
-        let market_id = MarketId::from_str(&market).map_err(|_| {
-            CancelOrderRequestBuilderError::InvalidFieldValue {
-                field: "market",
-                value: market.clone(),
-            }
-        })?;
+        let (market, market_id) = self.resolve_market()?;
 
         let account = self
             .account
@@ -622,14 +699,52 @@ impl CancelOrderRequestBuilder {
             });
         }
 
-        Ok(CancelOrderRequest {
+        return Ok(CancelOrderRequest {
             market_id,
-            market: market.into(),
+            market,
             account_id,
             account: account.into(),
             order_id: self.order_id,
             client_order_id: self.client_order_id,
-        })
+        });
+    }
+
+    /// The market the request carries, with its parsed id: the one
+    /// [`market()`](Self::market) named, or none for
+    /// [`all_markets()`](Self::all_markets), which must stand alone.
+    fn resolve_market(
+        &self,
+    ) -> Result<(Option<Arc<str>>, Option<MarketId>), CancelOrderRequestBuilderError> {
+        if self.all_markets {
+            let other = if self.market.is_some() {
+                Some("market")
+            } else if self.order_id.is_some() {
+                Some("order_id")
+            } else if self.client_order_id.is_some() {
+                Some("client_order_id")
+            } else {
+                None
+            };
+            return match other {
+                Some(other) => Err(CancelOrderRequestBuilderError::ConflictingFields {
+                    field: "all_markets",
+                    other,
+                }),
+                None => Ok((None, None)),
+            };
+        }
+
+        let market = self
+            .market
+            .as_deref()
+            .ok_or(CancelOrderRequestBuilderError::MissingField { field: "market" })?;
+        let market_id = MarketId::from_str(market).map_err(|_| {
+            CancelOrderRequestBuilderError::InvalidFieldValue {
+                field: "market",
+                value: market.to_string(),
+            }
+        })?;
+        return Ok((Some(Arc::from(market)), Some(market_id)));
     }
 }
 
@@ -679,6 +794,61 @@ mod tests {
                     field: "client_order_id",
                     ..
                 })
+            ),
+            "{result:?}"
+        );
+    }
+
+    // the cancel of every market goes on the wire as the account alone
+    #[test]
+    fn all_markets_builds_a_request_naming_no_market() {
+        let request = CancelOrderRequest::builder()
+            .all_markets()
+            .account("0x123")
+            .build()
+            .unwrap();
+
+        assert_eq!(request.market, None);
+        assert_eq!(request.market_id, None);
+        assert_eq!(request.order_id, None);
+        assert_eq!(request.client_order_id, None);
+        assert_eq!(json::to_string(&request).unwrap(), r#"{"account":"0x123"}"#);
+    }
+
+    #[test]
+    fn all_markets_beside_a_market_or_an_order_is_refused() {
+        let cases = [
+            (CancelOrderRequest::builder().market("0x123"), "market"),
+            (CancelOrderRequest::builder().order_id(42), "order_id"),
+            (
+                CancelOrderRequest::builder().client_order_id("x"),
+                "client_order_id",
+            ),
+        ];
+        for (builder, conflicting) in cases {
+            let result = builder.all_markets().account("0x123").build();
+            assert!(
+                matches!(
+                    result,
+                    Err(CancelOrderRequestBuilderError::ConflictingFields {
+                        field: "all_markets",
+                        other,
+                    }) if other == conflicting
+                ),
+                "{conflicting}: {result:?}"
+            );
+        }
+    }
+
+    // a forgotten market never widens a cancel to every market
+    #[test]
+    fn the_builder_refuses_a_request_naming_neither_a_market_nor_all_markets() {
+        let result = CancelOrderRequest::builder().account("0x123").build();
+
+        assert!(
+            matches!(
+                result,
+                Err(CancelOrderRequestBuilderError::MissingField { field: "market" })
             ),
             "{result:?}"
         );

@@ -172,8 +172,11 @@ pub enum Topic {
     Deposits(Accounts),
     /// Withdrawals debited from the given accounts.
     Withdrawals(Accounts),
-    /// Liquidations triggered on the given accounts.
+    /// Liquidation rounds on the given accounts, one event per market of a round.
     Liquidations(Accounts),
+    /// Account events feed entries (deposits, withdrawal steps, finished liquidations) of the
+    /// given accounts.
+    AccountEvents(Accounts),
 }
 
 impl Topic {
@@ -223,6 +226,7 @@ impl Topic {
             Topic::Deposits(a) => f.deposits_account_ids.extend(a.0),
             Topic::Withdrawals(a) => f.withdrawals_account_ids.extend(a.0),
             Topic::Liquidations(a) => f.liquidations_account_ids.extend(a.0),
+            Topic::AccountEvents(a) => f.account_events_account_ids.extend(a.0),
         }
     }
 }
@@ -279,6 +283,8 @@ struct Filters {
     withdrawals_account_ids: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     liquidations_account_ids: Vec<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    account_events_account_ids: Vec<String>,
 }
 
 impl Filters {
@@ -740,8 +746,9 @@ fn deserialize_event_data(event_name: &str, raw: Value) -> Result<StreamEventDat
         "fundingrate" | "funding_rate" | "fundingrates" | "funding_rates" => {
             json::from_value(raw).map(StreamEventData::FundingRate)
         }
-        "liquidationtriggered" | "liquidation_triggered" => {
-            json::from_value(raw).map(StreamEventData::LiquidationTriggered)
+        "liquidation" | "liquidations" => json::from_value(raw).map(StreamEventData::Liquidation),
+        "accountevent" | "account_event" | "accountevents" | "account_events" => {
+            json::from_value(raw).map(StreamEventData::AccountEvent)
         }
         "heartbeat" => Ok(StreamEventData::Heartbeat),
         "connectionaborted" | "connection_aborted" => {
@@ -802,8 +809,11 @@ pub enum StreamEventData {
     /// Funding rate of one market at one estimator crank: an estimate or a settlement
     FundingRate(FundingRate),
 
-    /// Liquidation triggered for an account across one or more positions
-    LiquidationTriggered(LiquidationTriggered),
+    /// One market of one liquidation round (`Liquidation`)
+    Liquidation(Liquidation),
+
+    /// One entry of the account events feed (`AccountEvent`)
+    AccountEvent(AccountEventEnvelope),
 
     /// Server-emitted liveness signal (sent when the connection was opened with `heartbeat=true`)
     Heartbeat,
@@ -873,16 +883,31 @@ pub struct OrderUpdate {
     /// Empty when served by an indexer predating the field
     #[serde(default, alias = "a")]
     pub account_id: String,
+    #[serde(alias = "m")]
+    pub market_id: String,
+    #[serde(alias = "fq")]
+    pub filled_quantity: Decimal,
     #[serde(alias = "rq")]
     pub remaining_quantity: Decimal,
     #[serde(alias = "sq")]
     pub stopped_quantity: Decimal,
+    #[serde(alias = "afp")]
+    pub average_filled_price: Decimal,
+    #[serde(alias = "ov")]
+    pub order_value: Option<Decimal>,
+    #[serde(alias = "fov")]
+    pub filled_order_value: Decimal,
     #[serde(alias = "ua_ms")]
     pub updated_at_ms: u64,
     #[serde(alias = "st")]
     pub status: OrderStatus,
     #[serde(alias = "er")]
     pub error: Option<OrderError>,
+    /// The sequencer transaction that updated the order. An update at block start (a
+    /// conditional trigger, say) carries the block-start hash, which blocks with the same
+    /// checkpoints share, so it does not identify one block.
+    #[serde(alias = "stx")]
+    pub sequencer_tx_hash: String,
 }
 
 /// Terminal-lifecycle event covering one or more orders (`OrderTerminated`).
@@ -896,12 +921,19 @@ pub struct OrderTerminated {
     /// predating the field
     #[serde(default, alias = "a")]
     pub account_ids: Vec<String>,
+    #[serde(alias = "m")]
+    pub market_id: String,
     #[serde(alias = "ua_ms")]
     pub updated_at_ms: u64,
     #[serde(alias = "st")]
     pub status: OrderStatus,
     #[serde(alias = "cs")]
     pub conditional_status: Option<ConditionalStatus>,
+    /// The sequencer transaction that terminated the orders. A termination at block start (an
+    /// expiry, say) carries the block-start hash, which blocks with the same checkpoints share,
+    /// so it does not identify one block.
+    #[serde(alias = "stx")]
+    pub sequencer_tx_hash: String,
 }
 
 /// Retirement of a position the exchange dropped before any trade opened it
@@ -929,34 +961,6 @@ pub struct ConnectionAborted {
     pub message: String,
 }
 
-/// Liquidation-triggered event (`LiquidationTriggered`) covering one account's positions.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LiquidationTriggered {
-    #[serde(alias = "i")]
-    pub liquidation_id: i64,
-    #[serde(alias = "a")]
-    pub account_id: String,
-    #[serde(alias = "li")]
-    pub liquidator_id: String,
-    #[serde(alias = "ps")]
-    pub positions: Vec<LiquidationPosition>,
-    #[serde(alias = "ca_ms")]
-    pub created_at_ms: u64,
-}
-
-/// A single position entry within a [`LiquidationTriggered`] event.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct LiquidationPosition {
-    #[serde(alias = "m")]
-    pub market_id: String,
-    #[serde(alias = "lps")]
-    pub liquidated_position_size: Decimal,
-    #[serde(alias = "tid")]
-    pub trade_id: Option<i64>,
-    #[serde(alias = "st")]
-    pub status: LiquidationStatus,
-}
-
 /// Funding-rate event (`FundingRate`): the rate of one market at one crank of its estimator,
 /// with the estimator parameters that produced it.
 ///
@@ -965,8 +969,9 @@ pub struct LiquidationPosition {
 /// market's funding source.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FundingRate {
-    #[serde(alias = "txd")]
-    pub tx_digest: String,
+    /// The IOTA transaction of the crank
+    #[serde(alias = "sltx")]
+    pub settlement_tx_hash: String,
     #[serde(alias = "i")]
     pub id: String,
     #[serde(alias = "m")]
@@ -977,6 +982,9 @@ pub struct FundingRate {
     pub premium_average: Decimal,
     #[serde(alias = "cp")]
     pub corrected_premium: Decimal,
+    /// The index price that the crank used
+    #[serde(alias = "ip")]
+    pub index_price: Decimal,
     /// The estimate of a coming settlement, or the settlement itself
     #[serde(alias = "st")]
     pub status: FundingRateStatus,
@@ -1039,6 +1047,8 @@ pub struct StreamPriceLevel(pub Decimal, pub Option<Decimal>);
 
 #[cfg(test)]
 mod tests {
+    use rust_decimal_macros::dec;
+
     use super::*;
 
     #[test]
@@ -1200,19 +1210,20 @@ mod tests {
 
     #[test]
     fn decodes_a_funding_rate_estimate() {
-        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"FundingRate","d":{"txd":"0xtx","i":"0001","m":"0xbtc","fr":"0.0001","pa":"0.0002","cp":"0.0003","st":{"Estimated":{"nft_ms":4102444800000}},"imn":"1000","sf_ms":3600000,"wlf":8,"ir":"0.00001","dl":null,"ub":"0.05","ott_ms":null,"ca_ms":1783382400500}}"#;
+        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"FundingRate","d":{"sltx":"0xtx","i":"0001","m":"0xbtc","fr":"0.0001","pa":"0.0002","cp":"0.0003","ip":"61250.5","st":{"Estimated":{"nft_ms":4102444800000}},"imn":"1000","sf_ms":3600000,"wlf":8,"ir":"0.00001","dl":null,"ub":"0.05","ott_ms":null,"ca_ms":1783382400500}}"#;
         let StreamMessage::Event(event) = parse_stream_message(text).unwrap() else {
             panic!("expected a data event");
         };
         let StreamEventData::FundingRate(rate) = event.data else {
             panic!("expected a funding rate, got {:?}", event.data);
         };
-        assert_eq!(rate.tx_digest, "0xtx");
+        assert_eq!(rate.settlement_tx_hash, "0xtx");
         assert_eq!(rate.id, "0001");
         assert_eq!(rate.market_id, "0xbtc");
         assert_eq!(rate.funding_rate.to_string(), "0.0001");
         assert_eq!(rate.premium_average.to_string(), "0.0002");
         assert_eq!(rate.corrected_premium.to_string(), "0.0003");
+        assert_eq!(rate.index_price.to_string(), "61250.5");
         assert_eq!(
             rate.status,
             FundingRateStatus::Estimated(FundingEstimate {
@@ -1237,7 +1248,7 @@ mod tests {
 
     #[test]
     fn decodes_a_funding_rate_settlement() {
-        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"FundingRate","d":{"txd":"0xtx","i":"0001","m":"0xbtc","fr":"0.0001","pa":"0.0002","cp":"0.0003","st":{"Settled":{"sl_ms":1783382400000}},"imn":"1000","sf_ms":null,"wlf":null,"ir":null,"dl":null,"ub":null,"ott_ms":null,"ca_ms":1783382400500}}"#;
+        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"FundingRate","d":{"sltx":"0xtx","i":"0001","m":"0xbtc","fr":"0.0001","pa":"0.0002","cp":"0.0003","ip":"61250.5","st":{"Settled":{"sl_ms":1783382400000}},"imn":"1000","sf_ms":null,"wlf":null,"ir":null,"dl":null,"ub":null,"ott_ms":null,"ca_ms":1783382400500}}"#;
         let StreamMessage::Event(event) = parse_stream_message(text).unwrap() else {
             panic!("expected a data event");
         };
@@ -1274,6 +1285,135 @@ mod tests {
         };
         assert_eq!(balance.asset_id, "0x2::usdc::USDC");
         assert_eq!(balance.balance.to_string(), "7");
+    }
+
+    #[test]
+    fn subscribe_frame_names_the_account_events_accounts() {
+        let topics = [Topic::AccountEvents(Accounts::new(["0x1", "0x2"]))];
+        let v: Value = json::from_str(&build_subscribe_frame("feed", topics).unwrap()).unwrap();
+        assert_eq!(
+            v["d"]["account_events_account_ids"],
+            json::json!(["0x1", "0x2"])
+        );
+    }
+
+    #[test]
+    fn decodes_a_liquidation_event_in_its_short_form() {
+        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"Liquidation","d":{"i":13,"m":"0xbtc","a":"0xacc","mg":"Isolated","tr":"Requested","rb":"0xreq","mp":"61250.5","co":[],"cco":["77"],"pb":{"d":"Long","s":"2.5","r":7},"pa":{"d":null,"s":"0","r":8},"oc":"Takeover","od":{"rs":"Backstop","li":"0xliq","tid":834604724,"s":"2.5","p":"61200","b":"12.5"},"tids":[834604724],"ca_ms":1783382400500,"stx":"0xstx"}}"#;
+        let StreamMessage::Event(event) = parse_stream_message(text).unwrap() else {
+            panic!("expected a data event");
+        };
+        assert_eq!(
+            event.data,
+            StreamEventData::Liquidation(Liquidation {
+                node_state_version: String::new(),
+                liquidation_id: 13,
+                market_id: "0xbtc".to_string(),
+                account_id: "0xacc".to_string(),
+                margin_group: Some(LiquidationMarginGroup::Isolated),
+                trigger: LiquidationTrigger::Requested,
+                requested_by: Some("0xreq".to_string()),
+                mark_price: Some(dec!(61250.5)),
+                cancelled_order_ids: Some(vec![]),
+                cancelled_conditional_ids: Some(vec!["77".to_string()]),
+                position_before: Some(LiquidatedPosition {
+                    direction: Some(Direction::Long),
+                    size: dec!(2.5),
+                    revision: 7,
+                }),
+                position_after: Some(LiquidatedPosition {
+                    direction: None,
+                    size: dec!(0),
+                    revision: 8,
+                }),
+                outcome: LiquidationOutcome::Takeover,
+                outcome_detail: Some(LiquidationOutcomeDetail::Takeover(
+                    LiquidationTakeoverClose {
+                        reason: LiquidationTakeoverReason::Backstop,
+                        liquidator_id: "0xliq".to_string(),
+                        trade_id: 834604724,
+                        size: dec!(2.5),
+                        price: dec!(61200),
+                        buffer: Some(dec!(12.5)),
+                    }
+                )),
+                trade_ids: vec![834604724],
+                created_at_ms: 1783382400500,
+                sequencer_tx_hash: Some("0xstx".to_string()),
+            })
+        );
+    }
+
+    #[test]
+    fn decodes_account_events_in_their_short_form() {
+        let rejected = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"AccountEvent","d":{"t":"WithdrawalRejected","v":1,"d":{"ai":"0xacc","n":5,"ar":"200","s":"Completed","cs":"Failure","ca_ms":1783382400500,"ctx":"0xctx"}}}"#;
+        let StreamMessage::Event(event) = parse_stream_message(rejected).unwrap() else {
+            panic!("expected a data event");
+        };
+        assert_eq!(
+            event.data,
+            StreamEventData::AccountEvent(AccountEventEnvelope {
+                event_type: AccountEventType::WithdrawalRejected,
+                version: 1,
+                data: AccountEvent::WithdrawalRejected(WithdrawalRejected {
+                    account_id: "0xacc".to_string(),
+                    nonce: 5,
+                    amount_requested: dec!(200),
+                    status: WithdrawalStatus::Completed,
+                    completion_status: Some(WithdrawalCompletionStatus::Failure),
+                    completed_at_ms: 1783382400500,
+                    completion_tx_hash: "0xctx".to_string(),
+                }),
+            })
+        );
+
+        // the stream's deposit frame carries no `sv`, and its `a` is the amount
+        let deposit = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"AccountEvent","d":{"t":"DepositCompleted","v":1,"d":{"sltx":"0xdep","i":"0001","ai":"0xacc","a":"1000.5","da_ms":1783382400500}}}"#;
+        let StreamMessage::Event(event) = parse_stream_message(deposit).unwrap() else {
+            panic!("expected a data event");
+        };
+        assert_eq!(
+            event.data,
+            StreamEventData::AccountEvent(AccountEventEnvelope {
+                event_type: AccountEventType::DepositCompleted,
+                version: 1,
+                data: AccountEvent::DepositCompleted(Deposit {
+                    node_state_version: String::new(),
+                    id: "0001".to_string(),
+                    account_id: "0xacc".to_string(),
+                    amount: dec!(1000.5),
+                    settlement_tx_hash: "0xdep".to_string(),
+                    deposited_at_ms: 1783382400500,
+                }),
+            })
+        );
+    }
+
+    #[test]
+    fn decodes_an_order_update_with_its_fill_state_and_receipt() {
+        let text = r#"{"v":1,"t_ms":1783382401000,"sv":"9","n":"OrderUpdated","d":{"i":"834604701","ci":null,"a":"0xacc","m":"0xbtc","fq":"0.4","rq":"0.1","sq":"0","afp":"61000","ov":"30500","fov":"24400","ua_ms":1783382400500,"st":"Active","er":null,"stx":"0xstx"}}"#;
+        let StreamMessage::Event(event) = parse_stream_message(text).unwrap() else {
+            panic!("expected a data event");
+        };
+        assert_eq!(
+            event.data,
+            StreamEventData::OrderUpdate(OrderUpdate {
+                id: "834604701".to_string(),
+                client_order_id: None,
+                account_id: "0xacc".to_string(),
+                market_id: "0xbtc".to_string(),
+                filled_quantity: dec!(0.4),
+                remaining_quantity: dec!(0.1),
+                stopped_quantity: dec!(0),
+                average_filled_price: dec!(61000),
+                order_value: Some(dec!(30500)),
+                filled_order_value: dec!(24400),
+                updated_at_ms: 1783382400500,
+                status: OrderStatus::Active,
+                error: None,
+                sequencer_tx_hash: "0xstx".to_string(),
+            })
+        );
     }
 
     #[test]

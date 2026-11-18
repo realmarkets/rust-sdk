@@ -10,9 +10,8 @@
 //! - **Advanced Time-In-Force Options**: GTC, GTT, IOC, FOK with full validation
 //! - **Field Aliases**: Compact field aliases for efficient serialization
 //! - **Builder Pattern**: Type-safe construction with comprehensive validation
-//! - **Conditional Orders**: Stop-loss and take-profit, paired one-cancels-other
-//!   (OCO). Trailing-stop triggers are reserved vocabulary the sequencer rejects
-//!   (`TrailingStopTriggersNotSupported` 125)
+//! - **Conditional Orders**: Stop-loss, take-profit and trailing stops, paired
+//!   one-cancels-other (OCO)
 //! - **Order Linking**: Parent-child order relationships and activation triggers
 //! - **Position Management**: Reduce-only and post-only order flags
 //!
@@ -117,13 +116,40 @@
 //!     .expect("Failed to build order");
 //! ```
 //!
-//! ## Trailing stops — not supported
+//! ## Trailing stops
 //!
 //! [`Trigger::numeric_trailing_distance`] and
-//! [`Trigger::percentage_trailing_distance`] (`tntd` / `tptd` on the wire) are
-//! reserved vocabulary: the builder accepts them, but the sequencer rejects any
-//! order carrying one with `TrailingStopTriggersNotSupported` (125).
-//! [`Trigger::price`] is the only trigger it admits.
+//! [`Trigger::percentage_trailing_distance`] (`tntd` / `tptd` on the wire) trail
+//! the reference price. A `FallsBelow` order fires once the price is its distance
+//! or more below the highest since the order became active, a `RisesAbove` one
+//! once it is its distance or more above the lowest. A numeric distance is a
+//! price amount, at the market's price decimals and tick size. A percentage is a
+//! fraction greater than 0 and less than 1, with at most
+//! [`MAX_TRAILING_PERCENTAGE_DECIMAL_PLACES`] decimal places: `"0.05"` is 5%.
+//!
+//! ```rust
+//! use types::api::submit_order::{Conditional, SubmitOrderRequest, Trigger};
+//!
+//! // closes the whole position once the mark is 5% below its highest
+//! let trailing_stop = Conditional::builder()
+//!     .falls_below()
+//!     .trigger(Trigger::percentage_trailing_distance("0.05"))
+//!     .mark_price()
+//!     .percentage_of_position_at_trigger("1.0")
+//!     .build()
+//!     .expect("Failed to build conditional");
+//!
+//! let order = SubmitOrderRequest::builder()
+//!     .market("0x0000000000000000000000000000000000000000000000000000000000000789")
+//!     .account("0x0000000000000000000000000000000000000000000000000000000000000789")
+//!     .sell()
+//!     .market_order()
+//!     .immediate_or_cancel()
+//!     .reduce_only(true)
+//!     .conditional(trailing_stop)
+//!     .build()
+//!     .expect("Failed to build order");
+//! ```
 //!
 //! ## OCO (one-cancels-other) stop loss and take profit
 //!
@@ -248,12 +274,11 @@ use crate::{
 ///
 /// # Variants
 ///
-/// - **Price**: Triggers at a specific fixed price level. **The only variant the
-///   sequencer accepts.**
-/// - **NumericTrailingDistance**: reserved — rejected with
-///   `TrailingStopTriggersNotSupported` (125)
-/// - **PercentageTrailingDistance**: reserved — rejected with
-///   `TrailingStopTriggersNotSupported` (125)
+/// - **Price**: Triggers at a specific fixed price level.
+/// - **NumericTrailingDistance**: Triggers a price amount away from the highest
+///   (or lowest) price since the order became active.
+/// - **PercentageTrailingDistance**: Triggers a fraction of that price away from
+///   it.
 ///
 /// # Field Aliases
 ///
@@ -317,34 +342,45 @@ pub enum Trigger {
     #[serde(alias = "tp")]
     Price(String),
 
-    /// Triggers when the reference price moves a fixed numeric distance from its peak/trough.
+    /// Triggers when the reference price moves a fixed price amount from its
+    /// peak or trough.
     ///
-    /// This creates a trailing trigger that follows price movements while maintaining
-    /// a constant numeric distance. The distance is measured from the most favorable
-    /// price seen since the trigger was activated.
+    /// The peak or trough is the highest or lowest reference price since the
+    /// order became active: at submission, or when it arms behind an
+    /// order-linked parent.
     ///
     /// # Behavior
-    /// - For buy orders (falls_below): Triggers when price drops by the specified amount from its highest point
-    /// - For sell orders (rises_above): Triggers when price rises by the specified amount from its lowest point
+    /// - `FallsBelow`: triggers once the price is the amount or more below its
+    ///   highest
+    /// - `RisesAbove`: triggers once the price is the amount or more above its
+    ///   lowest
+    ///
+    /// # Format
+    /// A price amount: at most the market's price decimals, and a multiple of its
+    /// tick size
     ///
     /// # Example
-    /// - Trigger when BTC drops $2000 from its peak: `NumericTrailingDistance("2000.5")`
+    /// - Trigger when BTC drops $2000 from its peak: `NumericTrailingDistance("2000.0")`
     #[serde(rename = "trigger_numeric_trailing_distance")]
     #[serde(alias = "tntd")]
     NumericTrailingDistance(String),
 
-    /// Triggers when the reference price moves a percentage distance from its peak/trough.
+    /// Triggers when the reference price moves a fraction of its peak or trough
+    /// away from it.
     ///
-    /// This creates a trailing trigger that follows price movements while maintaining
-    /// a constant percentage distance. The percentage is calculated from the most favorable
-    /// price seen since the trigger was activated.
+    /// The peak or trough is the highest or lowest reference price since the
+    /// order became active: at submission, or when it arms behind an
+    /// order-linked parent.
     ///
     /// # Behavior
-    /// - For buy orders (falls_below): Triggers when price drops by the specified percentage from its highest point
-    /// - For sell orders (rises_above): Triggers when price rises by the specified percentage from its lowest point
+    /// - `FallsBelow`: triggers once the price is the fraction of its highest or
+    ///   more below it
+    /// - `RisesAbove`: triggers once the price is the fraction of its lowest or
+    ///   more above it
     ///
     /// # Format
-    /// The percentage should be expressed as a decimal (e.g., "0.05" for 5%, "0.10" for 10%)
+    /// A fraction greater than 0 and less than 1 ("0.05" for 5%), with at most
+    /// [`MAX_TRAILING_PERCENTAGE_DECIMAL_PLACES`] decimal places
     ///
     /// # Example
     /// - Trigger when BTC drops 5% from its peak: `PercentageTrailingDistance("0.05")`
@@ -723,10 +759,10 @@ pub struct ConditionalExpiry {
 /// go at once (cancel-all, liquidation, settlement), both go with the rest,
 /// without `CancelledByOco`. The order named must be a
 /// conditional of the same account and market still waiting to trigger, pending
-/// or dormant, in no pair yet, on the same side and with the opposite trigger
-/// condition; the sequencer rejects the link otherwise (`OcoLinkedOrderNotFound`,
-/// `OcoLinkedOrderNotPending`, `OcoLinkedOrderAlreadyLinked`, `OcoSideMismatch`,
-/// `OcoTriggerConditionMismatch`).
+/// or dormant, in no pair yet, and with the opposite trigger condition, on
+/// either side; the sequencer rejects the link otherwise
+/// (`OcoLinkedOrderNotFound`, `OcoLinkedOrderNotPending`,
+/// `OcoLinkedOrderAlreadyLinked`, `OcoTriggerConditionMismatch`).
 ///
 /// # Examples
 ///
@@ -832,7 +868,9 @@ pub struct ConditionalExpiry {
 /// # Validation Rules
 ///
 /// 1. **Trigger**: `trigger_condition`, `trigger` and `reference_price` are all
-///    required; the trigger must be `Price` (a trailing distance is rejected, 125)
+///    required. A price or numeric trailing distance follows the market's price
+///    decimals and tick size (130-132, 140-141 / 169-173); a trailing percentage
+///    is greater than 0 and less than 1 in whole basis points (174-176)
 /// 2. **Quantity**: required (136), and must be `Absolute` or a percentage in
 ///    `(0,1]`; `OrderLink` / `FilledOrderLink` are rejected (133)
 /// 3. **Expiry**: if present, in the future and no later than
@@ -1076,7 +1114,8 @@ pub struct Conditional {
 ///
 /// The following fields must be specified (either explicitly or via builder):
 /// - `market`: Market identifier
-/// - `account`: Account identifier
+/// - `account`: the account's [`AccountId`], not its
+///   [`AccountObjectId`](crate::core::AccountObjectId)
 /// - `side`: Buy or Sell
 /// - `tif`: Time in force (GTC, GTT, IOC, FOK)
 /// - `order_type`: Market or Limit
@@ -1227,8 +1266,8 @@ pub struct Conditional {
 /// GTT order with expiry:
 /// ```json
 /// {
-///   "market": "DOGEBTC",
-///   "account": "trader789",
+///   "market": "0x5efc5ad00c209baf4c5d77dfd1be18e8b50916e53adbe2142ae1b47af445303c",
+///   "account": "0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a",
 ///   "side": "Buy",
 ///   "tif": "GTT",
 ///   "expiry_timestamp": 1800000000000,
@@ -1244,7 +1283,7 @@ pub struct Conditional {
 ///
 /// The request undergoes comprehensive validation including:
 /// - Market existence and validity
-/// - Account authorization
+/// - Account authorization: `account` is an account of the transaction's owner
 /// - Price and quantity format and precision
 /// - Order type and price consistency
 /// - Time-in-force and expiry consistency
@@ -1279,7 +1318,8 @@ pub struct SubmitOrderRequest {
     #[serde(skip_serializing)]
     pub market_id: MarketId,
 
-    /// The account identifier that owns this order.
+    /// The [`AccountId`] of the account that owns this order: its static id, not
+    /// its [`AccountObjectId`](crate::core::AccountObjectId).
     ///
     /// This identifies which trading account the order belongs to and is used
     /// for position tracking, balance checks, and order management.
@@ -1289,7 +1329,9 @@ pub struct SubmitOrderRequest {
     /// - Must be `0x` and 64 lower-case hex digits, as an [`AccountId`] displays;
     ///   any other spelling, even of the same id, is refused with
     ///   `NonCanonicalAccountId` (502)
-    /// - Must be authorized to trade in the specified market
+    /// - Must be an account of the transaction's `owner`, or the command is refused
+    ///   with `SenderNotAllowed` (501) — which is also what an account object id
+    ///   here gets
     /// - Must have sufficient balance/margin for the order
     #[serde(alias = "sa")]
     #[serde(default)]
@@ -1531,14 +1573,12 @@ pub struct SubmitOrderRequest {
     /// # Features
     /// Conditional orders support:
     /// - Price-based triggers (stop-loss, take-profit)
+    /// - Trailing triggers, by a price amount or a percentage (trailing stops)
     /// - Multiple reference prices (last trade, index, mark)
     /// - Time-based expiration with trigger or cancel actions
     /// - Quantity as a fraction `(0,1]` of the position, at trigger or at submission
     /// - Order-linked activation (dormant until a parent order fills)
     /// - One-cancels-other pairs (a take profit and a stop loss)
-    ///
-    /// Trailing-stop triggers (125) are reserved vocabulary the sequencer
-    /// rejects.
     ///
     /// # Use Cases
     /// - **Stop-loss orders**: Automatically sell when price falls
@@ -1584,7 +1624,7 @@ pub struct SubmitOrderRequest {
 ///
 /// The following fields must be set before calling [`build()`](SubmitOrderRequestBuilder::build):
 /// - **Market**: Trading pair identifier
-/// - **Account**: Account address
+/// - **Account**: the account's [`AccountId`]
 /// - **Side**: Buy or Sell
 /// - **Time in force**: GTC, GTT, IOC, or FOK
 /// - **Order type**: Market or Limit
@@ -1733,7 +1773,7 @@ impl SubmitOrderRequestBuilder {
         self
     }
 
-    /// Sets the account address.
+    /// Sets the account the order is for, by its [`AccountId`].
     ///
     /// **Required field** - Must be set before calling [`build()`](Self::build).
     ///
@@ -1741,6 +1781,8 @@ impl SubmitOrderRequestBuilder {
     ///
     /// * `account` - the account id, `0x` and 64 lower-case hex digits; the
     ///   sequencer refuses any other spelling. An [`AccountId`] converts to it.
+    ///   Not the account's [`AccountObjectId`](crate::core::AccountObjectId), which
+    ///   the sequencer refuses with `SenderNotAllowed` (501).
     ///
     /// # Example
     ///
@@ -2146,6 +2188,11 @@ impl SubmitOrderRequestBuilder {
             OrderType::Unspecified => {
                 return Err(SubmitOrderRequestBuilderError::InvalidConfiguration {
                     message: "Order type must be specified".to_string(),
+                });
+            }
+            OrderType::Liquidation => {
+                return Err(SubmitOrderRequestBuilderError::InvalidConfiguration {
+                    message: "Liquidation orders are placed by the engine only".to_string(),
                 });
             }
         }
@@ -2694,13 +2741,10 @@ impl ConditionalExpiry {
 ///
 /// This builder provides a type-safe way to construct conditional orders with proper
 /// validation of required fields and configuration constraints. It supports:
-/// - Price-based triggers (rises above/falls below)
+/// - Price-based and trailing triggers (rises above/falls below) — see [`Trigger`]
 /// - Order-linked activation (bracket orders)
 /// - Flexible quantity specifications
 /// - Optional expiry configuration
-///
-/// It will also build a trailing-stop trigger, but the sequencer rejects it
-/// (125) — see [`Trigger`].
 ///
 /// # Required Fields
 ///
@@ -3365,6 +3409,10 @@ impl Trigger {
 /// order and far inside the range the renderer covers.
 pub const MAX_EXPIRY_TIMESTAMP_MS: u128 = 32_503_680_000_000;
 
+/// The most decimal places a trailing percentage may carry: a whole number of
+/// basis points (`0.0001` is 0.01%), which is what the sequencer trails by.
+pub const MAX_TRAILING_PERCENTAGE_DECIMAL_PLACES: u32 = 4;
+
 impl SubmitOrderRequest {
     /// Create a new SubmitOrderRequestBuilder
     pub fn builder() -> SubmitOrderRequestBuilder {
@@ -3528,6 +3576,28 @@ mod tests {
                 assert!(message.contains("Limit orders require a limit price"));
             }
             _ => panic!("Expected invalid configuration error"),
+        }
+    }
+
+    // only the engine places liquidation orders, so the builder refuses one even
+    // priced like a valid limit order
+    #[test]
+    fn test_submit_order_request_builder_liquidation_order() {
+        let result = SubmitOrderRequest::builder()
+            .market(MARKET1_MARKET_ID)
+            .account(ACCOUNT_ID)
+            .sell()
+            .order_type(OrderType::Liquidation)
+            .limit_price("50000.00")
+            .quantity("0.1")
+            .immediate_or_cancel()
+            .build();
+
+        match result.unwrap_err() {
+            SubmitOrderRequestBuilderError::InvalidConfiguration { message } => {
+                assert_eq!(message, "Liquidation orders are placed by the engine only");
+            }
+            other => panic!("Expected invalid configuration error, got {other:?}"),
         }
     }
 

@@ -4,8 +4,6 @@ use json::Value;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::stream::LiquidationPosition;
-
 // ---------------------------------------------------------------------------
 // Enums
 // ---------------------------------------------------------------------------
@@ -84,7 +82,7 @@ api_enum! {
 
 api_enum! {
     /// Order type
-    OrderType { Limit, Market }
+    OrderType { Limit, Market, Liquidation }
 }
 
 api_enum! {
@@ -179,6 +177,19 @@ api_enum! {
         ConditionalLinkedOrderNotFound,
         ConditionalLinkedOrderNeverTraded,
         WouldBankruptIsolatedPosition,
+        ConditionalLinkedOrderIsConditional,
+        OcoLinkedOrderNotFound,
+        OcoLinkedOrderNotPending,
+        OcoLinkedOrderAlreadyLinked,
+        OcoSideMismatch,
+        OcoTriggerConditionMismatch,
+        PositionLimitReduceOnly,
+        PositionLimitExceeded,
+        CancelledForCloseOnTrigger,
+        CancelledByOco,
+        ImrBelowMarketReduceOnly,
+        TooManyConditionals,
+        AccountInLiquidation,
     }
 }
 
@@ -195,6 +206,7 @@ api_enum! {
         Liquidated,
         LiquidatedWithInsurance,
         LiquidatedWithAdl,
+        LiquidatedOnBook,
     }
 }
 
@@ -206,6 +218,7 @@ api_enum! {
         LiquidationWithInsurance,
         LiquidationWithAdl,
         Settlement,
+        LiquidationOnBook,
     }
 }
 
@@ -304,13 +317,85 @@ api_enum! {
 }
 
 api_enum! {
-    /// Outcome of a liquidation for a single position
-    LiquidationStatus {
-        FullPosition,
-        PartialPosition,
-        OrdersCancelledOnly,
-        Rejected,
-        MarketSuspended,
+    /// How a liquidation round closed the position on one market
+    LiquidationOutcome {
+        /// Nothing was closed; only orders were cancelled
+        OrdersCancelled,
+        /// A liquidation order closed the position against the book
+        OnBook,
+        /// The designated liquidator took the solvent position over
+        Takeover,
+        /// The designated liquidator took the bankrupt position over, and the insurance fund
+        /// covers the debt
+        InsuranceTakeover,
+        /// The bankrupt position was closed against opposite positions by auto-deleveraging
+        Adl,
+        /// The market is suspended, so the position stays open
+        Suspended,
+    }
+}
+
+api_enum! {
+    /// What started a liquidation round
+    LiquidationTrigger {
+        /// Another account requested it
+        Requested,
+        /// An order of the account that could reduce its position
+        OwnOrder,
+        /// The check that runs again when the hold-off of a partial liquidation ends
+        HoldoffRecheck,
+    }
+}
+
+api_enum! {
+    /// The margin group of the account that a liquidated market belongs to
+    LiquidationMarginGroup {
+        /// The cross group, liquidated as a whole
+        Cross,
+        /// The isolated position on the market, liquidated alone
+        Isolated,
+    }
+}
+
+api_enum! {
+    /// Why the designated liquidator took over a solvent position
+    LiquidationTakeoverReason {
+        /// The round hands the position over instead of closing it on the book
+        Backstop,
+        /// The position was too large to close on the book
+        LargePosition,
+    }
+}
+
+api_enum! {
+    /// How much of a position the liquidations closed
+    WasLiquidated {
+        /// No fill of the position was a liquidation
+        No,
+        /// A liquidation closed a part of the position and left it open; a later ordinary fill,
+        /// even one that closes the position, does not change it
+        Partial,
+        /// A liquidation closed all that was left of the position
+        Full,
+    }
+}
+
+api_enum! {
+    /// Domain event of an entry of the account events feed
+    AccountEventType {
+        DepositCompleted,
+        WithdrawalRequested,
+        /// A withdrawal paid out, in full or in part
+        WithdrawalCompleted,
+        /// A withdrawal paid out nothing: it was cancelled, it expired, or its completion failed
+        WithdrawalRejected,
+        /// A liquidation round cancelled the orders of the account on the market
+        OrderLiquidationCompleted,
+        /// A liquidation round closed the position, in full or in part, with a liquidation order
+        /// on the book
+        PartialLiquidationCompleted,
+        /// A liquidator, the insurance fund, or ADL took over the position
+        BackstopLiquidationCompleted,
     }
 }
 
@@ -330,6 +415,7 @@ api_enum! {
         InvalidQueryParameter,
         EntityNotFound,
         ServiceUnavailable,
+        QueryTimeout,
     }
 }
 
@@ -453,9 +539,9 @@ pub struct MarketTicker {
     pub prev_price_24h: Option<Decimal>,
     #[serde(alias = "pc24h")]
     pub price_change_24h: Option<Decimal>,
-    /// Next perpetual funding rate as a fraction; `None` before the first funding update
+    /// Next perpetual funding rate as a fraction; zero before the first funding update
     #[serde(alias = "pnfr")]
-    pub perp_next_funding_rate: Option<Decimal>,
+    pub perp_next_funding_rate: Decimal,
     /// Timestamp of the next funding settlement; `None` before the first funding update
     #[serde(default, alias = "pnft_ms")]
     pub perp_next_funding_time_ms: Option<u64>,
@@ -526,9 +612,18 @@ pub struct Account {
     /// Full on-chain identifier of the settlement asset
     #[serde(alias = "as")]
     pub asset_id: String,
-    /// Balance free to place new orders or withdraw
+    /// Deprecated: the same value as `available_balance_for_trading`, which replaces it. The
+    /// indexer removes it in v0.35.0.
     #[serde(alias = "ab")]
     pub available_balance: Option<Decimal>,
+    /// The amount that the account can use as margin for new orders and positions
+    #[serde(default, alias = "abt")]
+    pub available_balance_for_trading: Option<Decimal>,
+    /// The amount that the account can withdraw now. An unrealised profit does not increase it;
+    /// an unrealised loss decreases it. `None` until the indexer first reads the margin of the
+    /// account.
+    #[serde(default, alias = "abw")]
+    pub available_balance_for_withdrawals: Option<Decimal>,
     /// One entry per collateral asset; today there is one, for `asset_id`
     #[serde(default, alias = "sb")]
     pub settled_balances: Vec<SettledBalance>,
@@ -597,6 +692,37 @@ pub struct Account {
     pub taker_fee_tier: u64,
     #[serde(alias = "dt")]
     pub discount_tier: u64,
+    /// One entry for each fee config of the markets on `asset_id`. Empty when served by an
+    /// indexer predating the field.
+    #[serde(default, alias = "fs")]
+    pub fees: Vec<AccountFees>,
+}
+
+/// The fees of an account under one fee config. A fee override on a position replaces them in
+/// its market.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountFees {
+    #[serde(alias = "fc")]
+    pub fee_config_id: String,
+    #[serde(alias = "mk")]
+    pub maker: AccountFeeRate,
+    #[serde(alias = "tk")]
+    pub taker: AccountFeeRate,
+}
+
+/// The fee of one side of a trade
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountFeeRate {
+    /// The tier of the account. It can be above the tiers of the fee config.
+    #[serde(alias = "t")]
+    pub tier: u64,
+    /// The rate of `tier`, or of tier 0 when the fee config does not set `tier`. A negative rate
+    /// is a rebate.
+    #[serde(alias = "r")]
+    pub rate: Decimal,
+    /// A multiplier: 1 is no discount. A negative `rate` is a rebate and takes no discount.
+    #[serde(alias = "d")]
+    pub discount: Decimal,
 }
 
 /// An account's settled balance in one collateral asset: cross collateral, plus the funds
@@ -697,6 +823,11 @@ pub struct Position {
     pub index: i64,
     #[serde(alias = "r")]
     pub revision: i64,
+    /// Latest DEX revision processed for the account and market when the row was last written
+    #[serde(alias = "slr")]
+    pub settlement_revision: i64,
+    /// Deprecated: the same value as `settlement_revision`, which replaces it. The indexer
+    /// removes it in v0.35.0.
     #[serde(alias = "cr")]
     pub confirmed_revision: i64,
     #[serde(alias = "st")]
@@ -715,8 +846,8 @@ pub struct Position {
     pub direction: Option<Direction>,
     #[serde(alias = "aep")]
     pub average_entry_price: Option<Decimal>,
-    /// The initial margin ratio the DEX applies to the position: the greater of the IMR the
-    /// account set and the market's current IMR
+    /// The initial margin ratio that the position record on the DEX stores. A market IMR change
+    /// does not change it.
     #[serde(alias = "cimr")]
     pub current_imr: Option<Decimal>,
     #[serde(alias = "cmm")]
@@ -731,16 +862,19 @@ pub struct Position {
     pub created_at_ms: Option<u64>,
     #[serde(default, alias = "ua_ms")]
     pub updated_at_ms: Option<u64>,
-    #[serde(default, alias = "coa_ms")]
-    pub confirmed_at_ms: Option<u64>,
-    #[serde(default, alias = "cua_ms")]
-    pub confirmed_updated_at_ms: Option<u64>,
+    /// DEX checkpoint time when this position was first settled on-chain; `None` until the
+    /// first DEX event
+    #[serde(default, alias = "sl_ms")]
+    pub settled_at_ms: Option<u64>,
+    /// DEX checkpoint time of the last DEX event that changed this position
+    #[serde(default, alias = "slua_ms")]
+    pub settlement_updated_at_ms: Option<u64>,
     #[serde(alias = "acp")]
     pub average_closing_price: Option<Decimal>,
     #[serde(alias = "lv")]
     pub liquidated_volume: Option<Decimal>,
     #[serde(alias = "wl")]
-    pub was_liquidated: Option<bool>,
+    pub was_liquidated: Option<WasLiquidated>,
     #[serde(alias = "av")]
     pub adl_volume: Option<Decimal>,
     #[serde(alias = "at")]
@@ -1168,8 +1302,22 @@ pub struct Fill {
     pub order_id: Option<String>,
     #[serde(alias = "t")]
     pub order_type: Option<OrderType>,
+    /// The sequencer transaction that placed the taker order of the trade; a maker fill carries
+    /// the hash of the taker. When no user transaction placed the taker, it is the transaction or
+    /// block that triggered the fill (a triggered conditional, the maker-shield queue draining at
+    /// block start, or a market settlement). Blocks with the same checkpoints share a
+    /// block-start hash, so it does not identify one block.
+    #[serde(default, alias = "stx")]
+    pub sequencer_tx_hash: Option<String>,
+    /// Deprecated: the same value as `sequencer_tx_hash`, which replaces it. The indexer removes
+    /// it in v0.35.0.
     #[serde(alias = "tx")]
     pub tx_hash: Option<String>,
+    /// The IOTA transaction that settled the fill; `None` until the fill settles, and for good
+    /// on a row written before the field existed. One IOTA transaction settles both sides of a
+    /// trade and can settle several trades.
+    #[serde(default, alias = "sltx")]
+    pub settlement_tx_hash: Option<String>,
     #[serde(alias = "tc")]
     pub trade_context: Option<TradeContext>,
 }
@@ -1192,7 +1340,11 @@ pub struct ListMarginModesResponse {
     pub pagination: Pagination,
 }
 
-/// Margin mode configuration for a specific account/market pair
+/// Margin mode configuration for a specific account/market pair.
+///
+/// `sequencer_tx_hash` and `settlement_tx_hash` are the last receipt from each source and update
+/// independently: a margin change usually arrives twice, once when the sequencer applies it and
+/// once when the DEX settles it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarginMode {
     #[serde(default, alias = "sv")]
@@ -1201,7 +1353,7 @@ pub struct MarginMode {
     pub account_id: String,
     #[serde(alias = "m")]
     pub market_id: String,
-    /// Effective Initial Margin Requirement for this account/market
+    /// The initial margin ratio that the position record of the account stores for the market
     pub imr: Decimal,
     #[serde(alias = "mm")]
     pub margin_mode: MarginModeType,
@@ -1209,6 +1361,16 @@ pub struct MarginMode {
     pub created_at_ms: u64,
     #[serde(alias = "ua_ms")]
     pub updated_at_ms: u64,
+    /// The last sequencer transaction that changed the margin mode or the IMR, set when the
+    /// sequencer applies the change, before it settles; `margin_mode` and `imr` show the new
+    /// value from then. `None` until the sequencer applies a margin change of the pair.
+    #[serde(default, alias = "stx")]
+    pub sequencer_tx_hash: Option<String>,
+    /// The last IOTA transaction that settled a margin change. It can belong to an earlier change
+    /// than `sequencer_tx_hash`, so a value here does not mean the latest change settled. `None`
+    /// until a margin change of the pair settles.
+    #[serde(default, alias = "sltx")]
+    pub settlement_tx_hash: Option<String>,
 }
 
 /// List balance updates response containing balance updates and pagination info
@@ -1223,9 +1385,13 @@ pub struct ListBalanceUpdatesResponse {
 pub struct BalanceUpdate {
     #[serde(alias = "i")]
     pub id: String,
-    /// On-chain transaction digest
-    #[serde(alias = "txd")]
-    pub tx_digest: String,
+    /// The IOTA transaction that applied the update
+    #[serde(alias = "sltx")]
+    pub settlement_tx_hash: String,
+    /// The trade that a `TradeFee`, `TradePnl` or `LiquidationCollateralTransfer` update settles;
+    /// `None` on the other types
+    #[serde(default, alias = "tid")]
+    pub trade_id: Option<String>,
     #[serde(alias = "ai")]
     pub account_id: String,
     #[serde(rename = "type", alias = "t")]
@@ -1346,6 +1512,9 @@ pub struct Order {
     pub expires_at_ms: Option<u64>,
     #[serde(alias = "p")]
     pub price: Option<Decimal>,
+    /// The sequencer transaction that placed the order; `None` on a record predating the field
+    #[serde(default, alias = "stx")]
+    pub sequencer_tx_hash: Option<String>,
 }
 
 /// List liquidations response containing liquidations and pagination info
@@ -1355,21 +1524,174 @@ pub struct ListLiquidationsResponse {
     pub pagination: Pagination,
 }
 
-/// A liquidation event affecting one account across one or more market positions.
+/// One market of one liquidation round: what the round did to the account's position on that
+/// market. A round that acts on several markets gives one item per market, under the same
+/// `liquidation_id`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Liquidation {
+    /// REST only: WebSocket liquidation events do not carry it
     #[serde(default, alias = "sv")]
     pub node_state_version: String,
     #[serde(alias = "i")]
     pub liquidation_id: i64,
+    #[serde(alias = "m")]
+    pub market_id: String,
+    /// The liquidated account
     #[serde(alias = "a")]
     pub account_id: String,
-    #[serde(alias = "li")]
-    pub liquidator_id: String,
-    #[serde(alias = "ps")]
-    pub positions: Vec<LiquidationPosition>,
+    /// `None` on a round of an engine up to v0.31.x
+    #[serde(default, alias = "mg")]
+    pub margin_group: Option<LiquidationMarginGroup>,
+    #[serde(alias = "tr")]
+    pub trigger: LiquidationTrigger,
+    /// The account that requested the liquidation; set when `trigger` is `Requested`
+    #[serde(default, alias = "rb")]
+    pub requested_by: Option<String>,
+    /// `None` on a market with no mark yet, and on a round of an engine up to v0.31.x
+    #[serde(default, alias = "mp")]
+    pub mark_price: Option<Decimal>,
+    /// `None` when the indexer does not know them: on a round it stored before v0.33.0, and on a
+    /// market whose close a v0.33.x indexer could not read. WebSocket events always carry them.
+    #[serde(default, alias = "co")]
+    pub cancelled_order_ids: Option<Vec<String>>,
+    /// `None` under the same conditions as `cancelled_order_ids`
+    #[serde(default, alias = "cco")]
+    pub cancelled_conditional_ids: Option<Vec<String>>,
+    /// `None` on a market where the account holds no position, and where a round of an engine
+    /// up to v0.31.x does not state it
+    #[serde(default, alias = "pb")]
+    pub position_before: Option<LiquidatedPosition>,
+    /// `None` under the same conditions as `position_before`
+    #[serde(default, alias = "pa")]
+    pub position_after: Option<LiquidatedPosition>,
+    #[serde(alias = "oc")]
+    pub outcome: LiquidationOutcome,
+    /// The close that `outcome` names; `None` when `outcome` is `OrdersCancelled` or `Suspended`
+    #[serde(default, alias = "od")]
+    pub outcome_detail: Option<LiquidationOutcomeDetail>,
+    /// Every trade that closed the position, in the order that they traded. An ADL close has one
+    /// trade per counterparty.
+    #[serde(alias = "tids")]
+    pub trade_ids: Vec<u64>,
     #[serde(alias = "ca_ms")]
     pub created_at_ms: u64,
+    /// The sequencer liquidation transaction; `None` on a round the indexer stored before v0.34.0
+    #[serde(default, alias = "stx")]
+    pub sequencer_tx_hash: Option<String>,
+}
+
+/// A position on one market, as a liquidation round found it or left it
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LiquidatedPosition {
+    /// `None` when the position is closed
+    #[serde(default, alias = "d")]
+    pub direction: Option<Direction>,
+    #[serde(alias = "s")]
+    pub size: Decimal,
+    #[serde(alias = "r")]
+    pub revision: i64,
+}
+
+/// The close that [`Liquidation::outcome`] names.
+///
+/// The wire form carries no tag: the keys tell the closes apart. Variants are tried in
+/// declaration order, and each requires a key that the payloads of the later ones lack
+/// (`order_id`, `reason`, `liquidator_id`), so the first that decodes is the right one even
+/// though unknown keys are ignored. The order matches the indexer's and must not change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum LiquidationOutcomeDetail {
+    OnBook(LiquidationOnBookClose),
+    Takeover(LiquidationTakeoverClose),
+    InsuranceTakeover(LiquidationInsuranceClose),
+    Adl(LiquidationAdlClose),
+}
+
+/// The close of a liquidation order on the book (`OnBook`)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LiquidationOnBookClose {
+    #[serde(alias = "oid")]
+    pub order_id: String,
+    /// The worst price that the slippage tolerance allows
+    #[serde(alias = "lp")]
+    pub limit_price: Decimal,
+    #[serde(alias = "rq")]
+    pub requested: Decimal,
+    #[serde(alias = "f")]
+    pub filled: Decimal,
+    /// In the order that they traded
+    #[serde(alias = "tids")]
+    pub trade_ids: Vec<u64>,
+}
+
+/// The takeover of a solvent position by the designated liquidator (`Takeover`)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LiquidationTakeoverClose {
+    #[serde(alias = "rs")]
+    pub reason: LiquidationTakeoverReason,
+    /// The account that took the position over
+    #[serde(alias = "li")]
+    pub liquidator_id: String,
+    #[serde(alias = "tid")]
+    pub trade_id: u64,
+    #[serde(alias = "s")]
+    pub size: Decimal,
+    #[serde(alias = "p")]
+    pub price: Decimal,
+    /// What the buffer gave the liquidator, in the settlement asset; `None` on a round of an
+    /// engine up to v0.31.x
+    #[serde(default, alias = "b")]
+    pub buffer: Option<Decimal>,
+}
+
+/// The takeover of a bankrupt position that the insurance fund covers (`InsuranceTakeover`)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LiquidationInsuranceClose {
+    /// The account that took the position over
+    #[serde(alias = "li")]
+    pub liquidator_id: String,
+    #[serde(alias = "tid")]
+    pub trade_id: u64,
+    #[serde(alias = "s")]
+    pub size: Decimal,
+    #[serde(alias = "p")]
+    pub price: Decimal,
+    /// The insurance fund config that the market settles against; `None` on a round of an
+    /// engine up to v0.31.x
+    #[serde(default, alias = "fu")]
+    pub fund: Option<String>,
+    /// The debt that the fund must cover, in the settlement asset; `None` on a round of an
+    /// engine up to v0.31.x
+    #[serde(default, alias = "sf")]
+    pub shortfall: Option<Decimal>,
+}
+
+/// The close of a bankrupt position by auto-deleveraging (`Adl`)
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LiquidationAdlClose {
+    /// The one price of every fill; `None` on a round of an engine up to v0.31.x whose
+    /// transaction holds no fill
+    #[serde(default, alias = "p")]
+    pub price: Option<Decimal>,
+    /// What the counterparties took of the position's debt, in the settlement asset. Less than
+    /// the debt when the price stops at the market's smallest price. `None` on a round of an
+    /// engine up to v0.31.x.
+    #[serde(default, alias = "db")]
+    pub debt: Option<Decimal>,
+    /// One per counterparty, in the order that they filled
+    #[serde(alias = "fl")]
+    pub fills: Vec<LiquidationAdlFill>,
+}
+
+/// One counterparty of an auto-deleveraging close
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LiquidationAdlFill {
+    #[serde(alias = "cp")]
+    pub counterparty_id: String,
+    #[serde(alias = "tid")]
+    pub trade_id: u64,
+    #[serde(alias = "s")]
+    pub size: Decimal,
 }
 
 /// List trades response containing trades and pagination info
@@ -1413,6 +1735,19 @@ pub struct Trade {
     pub buyer_order_id: Option<String>,
     #[serde(alias = "soi")]
     pub seller_order_id: Option<String>,
+    /// The sequencer transaction that placed the taker order. When no user transaction placed
+    /// the taker, it is the transaction or block that triggered the trade (a triggered
+    /// conditional, the maker-shield queue draining at block start, or a market settlement).
+    /// Blocks with the same checkpoints share a block-start hash, so it does not identify one
+    /// block. `None` for good on a row written before the field existed; WebSocket events always
+    /// carry it.
+    #[serde(default, alias = "stx")]
+    pub sequencer_tx_hash: Option<String>,
+    /// The IOTA transaction that settled both sides of the trade; `None` until the trade
+    /// settles, and for good on a row written before the field existed. One IOTA transaction can
+    /// settle several trades.
+    #[serde(default, alias = "sltx")]
+    pub settlement_tx_hash: Option<String>,
 }
 
 /// List market tickers response containing tickers and pagination info
@@ -1440,9 +1775,9 @@ pub struct Deposit {
     pub account_id: String,
     #[serde(alias = "a")]
     pub amount: Decimal,
-    /// On-chain transaction digest for this deposit
-    #[serde(alias = "txd")]
-    pub tx_digest: String,
+    /// The IOTA transaction of this deposit
+    #[serde(alias = "sltx")]
+    pub settlement_tx_hash: String,
     #[serde(alias = "da_ms")]
     pub deposited_at_ms: u64,
 }
@@ -1487,6 +1822,12 @@ pub struct Withdrawal {
     pub status: WithdrawalStatus,
     #[serde(alias = "cs")]
     pub completion_status: Option<WithdrawalCompletionStatus>,
+    /// The IOTA request transaction
+    #[serde(default, alias = "rtx")]
+    pub request_tx_hash: Option<String>,
+    /// The IOTA completion transaction, including a cancellation or expiry; `None` until then
+    #[serde(default, alias = "ctx")]
+    pub completion_tx_hash: Option<String>,
     /// REST only: WebSocket withdrawal events do not carry it
     #[serde(default)]
     pub node_state_version: String,
@@ -1504,9 +1845,9 @@ pub struct ListFundingPaymentsResponse {
 pub struct FundingPayment {
     #[serde(alias = "i")]
     pub id: String,
-    /// On-chain transaction digest
-    #[serde(alias = "txd")]
-    pub tx_digest: String,
+    /// The IOTA transaction that applied the payment
+    #[serde(alias = "sltx")]
+    pub settlement_tx_hash: String,
     #[serde(alias = "m")]
     pub market_id: String,
     #[serde(alias = "ai")]
@@ -1518,7 +1859,7 @@ pub struct FundingPayment {
     pub position_side: Direction,
     #[serde(alias = "pz")]
     pub position_size: Decimal,
-    /// Funding rate applied; `None` if not available
+    /// The rate of the last settlement before the payment; `None` if not available
     #[serde(alias = "r")]
     pub rate: Option<Decimal>,
     #[serde(alias = "ua_ms")]
@@ -1545,7 +1886,8 @@ pub struct ListFundingRatesHistoricResponse {
 pub struct SettledFundingRate {
     /// The settlement event, shared by every market its source funds in the same event
     pub id: String,
-    pub tx_digest: String,
+    /// The IOTA transaction of the settling crank
+    pub settlement_tx_hash: String,
     pub market_id: String,
     /// Per-settlement rate, already divided by `config.window_length_factor`
     pub funding_rate: Decimal,
@@ -1554,6 +1896,10 @@ pub struct SettledFundingRate {
     /// Premium average after the delta-band correction, before the upper bound and the
     /// division by `window_length_factor`
     pub corrected_premium: Decimal,
+    /// The index price that the settling crank used; `None` on a settlement the indexer stored
+    /// before it recorded the index price
+    #[serde(default)]
+    pub index_price: Option<Decimal>,
     /// On-chain clock time of the settling crank; at or before `created_at_ms`
     pub settled_at_ms: u64,
     /// The funding configuration in force at this settlement
@@ -1598,6 +1944,14 @@ pub struct OrderConditional {
     pub order_linked_activation_client_order_id: Option<String>,
     #[serde(alias = "olafq")]
     pub order_linked_activation_fill_quantity: Option<Decimal>,
+    /// The sequencer transaction that triggered the conditional (the price-trigger block, or the
+    /// placement when it triggers at submission); `None` until triggered
+    #[serde(default, alias = "tstx")]
+    pub trigger_sequencer_tx_hash: Option<String>,
+    /// When the order triggers, the sequencer cancels the account's other orders on this market
+    /// as far as the order's margin needs. Orders indexed before the field existed read `false`.
+    #[serde(default, alias = "cot")]
+    pub close_on_trigger: bool,
 }
 
 /// List market insurance cooldowns response containing cooldowns and pagination info
@@ -1723,4 +2077,160 @@ pub struct GlobalTradingMode {
 pub struct GlobalTradingPeriod {
     pub period_start_at_ms: u64,
     pub trading_mode: TradingMode,
+}
+
+/// List account events response containing the feed entries and pagination info
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ListAccountEventsResponse {
+    pub data: Vec<AccountEventEnvelope>,
+    pub pagination: Pagination,
+}
+
+/// One entry of the account events feed
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountEventEnvelope {
+    #[serde(rename = "type", alias = "t")]
+    pub event_type: AccountEventType,
+    /// Version of the shape of `data` for `event_type`; a new shape of the same event takes a
+    /// new version
+    #[serde(alias = "v")]
+    pub version: i32,
+    #[serde(alias = "d")]
+    pub data: AccountEvent,
+}
+
+/// Data of an account event: the fields of the `/api/v1/deposits`, `/api/v1/withdrawals` or
+/// `/api/v1/liquidations` item that the event sets, under the same names. Each variant is named
+/// after the [`AccountEventType`] that carries it.
+///
+/// The wire form carries no tag: the keys tell the shapes apart. Variants are tried in
+/// declaration order, and each but the last requires a key that the payloads of the later ones
+/// lack; `PartialLiquidationCompleted` has only keys the other liquidation shapes also have, so
+/// it must stay last. The order matches the indexer's and must not change.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum AccountEvent {
+    /// The whole deposit item, at `deposited_at_ms`
+    DepositCompleted(Deposit),
+    WithdrawalRequested(WithdrawalRequested),
+    WithdrawalCompleted(WithdrawalCompleted),
+    WithdrawalRejected(WithdrawalRejected),
+    OrderLiquidationCompleted(OrderLiquidationCompleted),
+    BackstopLiquidationCompleted(BackstopLiquidationCompleted),
+    PartialLiquidationCompleted(PartialLiquidationCompleted),
+}
+
+/// The fields of [`Withdrawal`] that its request sets, at `initiated_at_ms`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WithdrawalRequested {
+    #[serde(alias = "ai")]
+    pub account_id: String,
+    #[serde(alias = "n")]
+    pub nonce: i64,
+    #[serde(alias = "ar")]
+    pub amount_requested: Decimal,
+    #[serde(alias = "ia_ms")]
+    pub initiated_at_ms: u64,
+    /// Earliest time at which the sequencer may redeem the withdrawal
+    #[serde(alias = "rat_ms")]
+    pub release_at_timestamp_ms: u64,
+    /// The IOTA request transaction
+    #[serde(alias = "rtx")]
+    pub request_tx_hash: String,
+}
+
+/// The fields of [`Withdrawal`] that a completion with a payout sets, at `completed_at_ms`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WithdrawalCompleted {
+    #[serde(alias = "ai")]
+    pub account_id: String,
+    #[serde(alias = "n")]
+    pub nonce: i64,
+    #[serde(alias = "aw")]
+    pub amount_withdrawn: Decimal,
+    /// `Success` or `Partial`
+    #[serde(alias = "cs")]
+    pub completion_status: WithdrawalCompletionStatus,
+    #[serde(alias = "ca_ms")]
+    pub completed_at_ms: u64,
+    /// The IOTA completion transaction
+    #[serde(alias = "ctx")]
+    pub completion_tx_hash: String,
+}
+
+/// The fields of [`Withdrawal`] that a step with no payout sets, at `completed_at_ms`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WithdrawalRejected {
+    #[serde(alias = "ai")]
+    pub account_id: String,
+    #[serde(alias = "n")]
+    pub nonce: i64,
+    #[serde(alias = "ar")]
+    pub amount_requested: Decimal,
+    /// `Cancelled`, `Expired`, or `Completed` with a `Failure` completion
+    #[serde(alias = "s")]
+    pub status: WithdrawalStatus,
+    /// `Failure` when `status` is `Completed`, `None` otherwise
+    #[serde(default, alias = "cs")]
+    pub completion_status: Option<WithdrawalCompletionStatus>,
+    #[serde(alias = "ca_ms")]
+    pub completed_at_ms: u64,
+    /// The IOTA transaction that cancelled, expired or completed the withdrawal
+    #[serde(alias = "ctx")]
+    pub completion_tx_hash: String,
+}
+
+/// The fields of [`Liquidation`] that a round with the `OrdersCancelled` outcome sets
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct OrderLiquidationCompleted {
+    #[serde(alias = "i")]
+    pub liquidation_id: i64,
+    #[serde(alias = "m")]
+    pub market_id: String,
+    /// The liquidated account
+    #[serde(alias = "a")]
+    pub account_id: String,
+    #[serde(alias = "co")]
+    pub cancelled_order_ids: Vec<String>,
+    #[serde(alias = "ca_ms")]
+    pub created_at_ms: u64,
+}
+
+/// The fields of [`Liquidation`] that a round with the `Takeover`, `InsuranceTakeover` or `Adl`
+/// outcome sets
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct BackstopLiquidationCompleted {
+    #[serde(alias = "i")]
+    pub liquidation_id: i64,
+    #[serde(alias = "m")]
+    pub market_id: String,
+    /// The liquidated account
+    #[serde(alias = "a")]
+    pub account_id: String,
+    #[serde(alias = "oc")]
+    pub outcome: LiquidationOutcome,
+    #[serde(default, alias = "od")]
+    pub outcome_detail: Option<LiquidationOutcomeDetail>,
+    #[serde(default, alias = "pb")]
+    pub position_before: Option<LiquidatedPosition>,
+    #[serde(alias = "ca_ms")]
+    pub created_at_ms: u64,
+}
+
+/// The fields of [`Liquidation`] that a round with the `OnBook` outcome sets
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PartialLiquidationCompleted {
+    #[serde(alias = "i")]
+    pub liquidation_id: i64,
+    #[serde(alias = "m")]
+    pub market_id: String,
+    /// The liquidated account
+    #[serde(alias = "a")]
+    pub account_id: String,
+    #[serde(default, alias = "pb")]
+    pub position_before: Option<LiquidatedPosition>,
+    #[serde(default, alias = "pa")]
+    pub position_after: Option<LiquidatedPosition>,
+    #[serde(alias = "ca_ms")]
+    pub created_at_ms: u64,
 }

@@ -4,11 +4,11 @@ use iota_sdk_types::{Address, StructTag, TypeTag};
 use ptbs::{grpc::mock_node::field_object, mirrors};
 
 use super::{
-    ACCOUNT_OBJECT, ACCOUNT_STATIC, REGISTRY, REGISTRY_ORIGIN, REGISTRY_PACKAGE, SOUL_BOUND,
+    ACCOUNT_OBJECT_ID, ACCOUNT_STATIC, REGISTRY, REGISTRY_ORIGIN, REGISTRY_PACKAGE, SOUL_BOUND,
     account, accounts, config, deployed, register, sender, shared, signer, stable, struct_type,
 };
 use crate::account::{
-    Accounts,
+    AccountId, Accounts,
     lookup::{RegistryKeyType, RegistryType},
 };
 
@@ -19,13 +19,19 @@ async fn an_account_is_found_through_the_registry_and_the_exchange() {
     let accounts = accounts(&node).await;
 
     let details = accounts.get_existing(3).await.unwrap();
-    assert_eq!(details.account_id, ACCOUNT_STATIC.to_string());
-    assert_eq!(details.account_object_id, ACCOUNT_OBJECT.to_string());
+    assert_eq!(
+        details.account_id,
+        AccountId::from_be_bytes(ACCOUNT_STATIC.into_bytes())
+    );
+    assert_eq!(details.account_object_id, ACCOUNT_OBJECT_ID);
     assert_eq!(details.manager_cap_id, SOUL_BOUND.to_string());
 
     let found = accounts.get_existing_opt(3).await.unwrap().unwrap();
-    assert_eq!(found.account_id, ACCOUNT_STATIC.to_string());
-    assert_eq!(found.account_object_id, ACCOUNT_OBJECT.to_string());
+    assert_eq!(
+        found.account_id,
+        AccountId::from_be_bytes(ACCOUNT_STATIC.into_bytes())
+    );
+    assert_eq!(found.account_object_id, ACCOUNT_OBJECT_ID);
     assert_eq!(found.manager_cap_id, SOUL_BOUND.to_string());
 }
 
@@ -126,7 +132,7 @@ async fn the_balance_is_the_cross_collateral() {
 
     let balance = accounts(&node)
         .await
-        .account_balance(&ACCOUNT_OBJECT.to_string())
+        .account_balance(&ACCOUNT_OBJECT_ID)
         .await
         .unwrap();
     assert_eq!(balance.value, 250);

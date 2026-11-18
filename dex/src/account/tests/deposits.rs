@@ -2,7 +2,8 @@ use iota_sdk_types::{Command, Input, ObjectId};
 use ptbs::grpc::mock_node::{Execution, coin};
 
 use super::{
-    ACCOUNT_OBJECT, OnlySubmission, Received, account, accounts, deployed, register, sender, stable,
+    ACCOUNT_OBJECT_ID, OnlySubmission, Received, account, accounts, deployed, register, sender,
+    stable,
 };
 
 #[tokio::test]
@@ -19,10 +20,7 @@ async fn a_deposit_merges_coins_in_id_order_until_the_amount_is_covered() {
     node.set_execution(Execution::success(vec![], vec![]));
     let accounts = accounts(&node).await;
 
-    let digest = accounts
-        .deposit(&ACCOUNT_OBJECT.to_string(), 70)
-        .await
-        .unwrap();
+    let digest = accounts.deposit(&ACCOUNT_OBJECT_ID, 70).await.unwrap();
 
     let submission = node.only_submission();
     submission.assert_well_formed();
@@ -89,10 +87,7 @@ async fn one_coin_that_covers_the_amount_is_split_without_a_merge() {
     node.set_execution(Execution::success(vec![], vec![]));
     let accounts = accounts(&node).await;
 
-    accounts
-        .deposit(&ACCOUNT_OBJECT.to_string(), 100)
-        .await
-        .unwrap();
+    accounts.deposit(&ACCOUNT_OBJECT_ID, 100).await.unwrap();
 
     let submission = node.only_submission();
     assert_eq!(
@@ -123,7 +118,7 @@ async fn a_deposit_beyond_the_balance_is_refused_before_sending() {
 
     assert_eq!(
         accounts
-            .deposit(&ACCOUNT_OBJECT.to_string(), 81)
+            .deposit(&ACCOUNT_OBJECT_ID, 81)
             .await
             .unwrap_err()
             .to_string(),
@@ -141,7 +136,7 @@ async fn a_wallet_without_collateral_coins_is_refused() {
 
     assert_eq!(
         accounts
-            .deposit(&ACCOUNT_OBJECT.to_string(), 1)
+            .deposit(&ACCOUNT_OBJECT_ID, 1)
             .await
             .unwrap_err()
             .to_string(),

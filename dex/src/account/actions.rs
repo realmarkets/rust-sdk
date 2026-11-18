@@ -11,7 +11,7 @@ use ptbs::{
     mirrors,
 };
 
-use super::{AccountDetails, Accounts, TransactionDigest};
+use super::{AccountDetails, AccountId, AccountObjectId, Accounts, TransactionDigest};
 
 impl Accounts {
     /// Creates a new trading account on-chain.
@@ -91,8 +91,8 @@ impl Accounts {
 
         return Ok((
             AccountDetails {
-                account_id: account.account_id.to_string(),
-                account_object_id: account_object_id.to_string(),
+                account_id: AccountId::from_be_bytes(account.account_id.into_bytes()),
+                account_object_id: AccountObjectId::from_be_bytes(account_object_id.into_bytes()),
                 manager_cap_id: manager_wrapper_id.to_string(),
             },
             executed.digest,
@@ -113,7 +113,8 @@ impl Accounts {
     ///
     /// # Arguments
     ///
-    /// * `account_object_id` - Object ID of the trading account to deposit into
+    /// * `account_object_id` - The account object to deposit into, not the account's
+    ///   [`AccountId`]
     /// * `amount` - Amount to deposit in the smallest unit
     ///
     /// # Returns
@@ -144,16 +145,17 @@ impl Accounts {
     /// # let artifacts = Artifacts::from_file("artifacts.json")?;
     /// # let config: AccountsConfig = artifacts.into();
     /// let accounts = Accounts::new(client, config, signer).await?;
+    /// let details = accounts.get_existing(0).await?;
     ///
     /// // Deposit 1,000,000 into the account
-    /// let tx_digest = accounts.deposit("0xaccount123...", 1_000_000).await?;
+    /// let tx_digest = accounts.deposit(&details.account_object_id, 1_000_000).await?;
     /// println!("Deposit successful! Transaction: {}", tx_digest);
     /// # Ok(())
     /// # }
     /// ```
     pub async fn deposit(
         &self,
-        account_object_id: &str,
+        account_object_id: &AccountObjectId,
         amount: u64,
     ) -> anyhow::Result<TransactionDigest> {
         let mut builder = self.new_builder();
@@ -203,7 +205,8 @@ impl Accounts {
     ///
     /// # Arguments
     ///
-    /// * `account_object_id` - Object ID of the trading account to deposit into
+    /// * `account_object_id` - The account object to deposit into, not the account's
+    ///   [`AccountId`]
     /// * `amount` - Amount to deposit in the smallest unit
     ///
     /// # Returns
@@ -233,16 +236,17 @@ impl Accounts {
     /// # let artifacts = Artifacts::from_file("artifacts.json")?;
     /// # let config: AccountsConfig = artifacts.into();
     /// let accounts = Accounts::new(client, config, signer).await?;
+    /// let details = accounts.get_existing(0).await?;
     ///
     /// // Deposit 1,000,000 via VIP faucet
-    /// let tx_digest = accounts.vip_deposit("0xaccount123...", 1_000_000).await?;
+    /// let tx_digest = accounts.vip_deposit(&details.account_object_id, 1_000_000).await?;
     /// println!("VIP deposit successful! Transaction: {}", tx_digest);
     /// # Ok(())
     /// # }
     /// ```
     pub async fn vip_deposit(
         &self,
-        account_object_id: &str,
+        account_object_id: &AccountObjectId,
         amount: u64,
     ) -> anyhow::Result<TransactionDigest> {
         let mut builder = self.new_builder();
@@ -288,10 +292,10 @@ impl Accounts {
     ///
     /// This is a convenience method for testnet/devnet that calls the faucet's
     /// `deposit` function, which mints a fixed amount of test coins and deposits
-    /// them directly into the specified account.
+    /// them directly into the account object `account_object_id`.
     pub async fn mint_and_deposit_test_coins(
         &self,
-        account_object_id: &str,
+        account_object_id: &AccountObjectId,
     ) -> anyhow::Result<TransactionDigest> {
         let mut builder = self.new_builder();
 
@@ -346,8 +350,10 @@ impl Accounts {
     ///
     /// # Arguments
     ///
-    /// * `account_static_id` - Static ID of the trading account
-    /// * `account_object_id` - Current object ID of the trading account
+    /// * `account_id` - The account's static id, whose positions the withdrawal's
+    ///   margin check visits
+    /// * `account_object_id` - The account's current object, which the withdrawal
+    ///   debits
     /// * `manager_cap_id` - Object ID of the soul-bound manager capability
     /// * `amount` - Amount to withdraw in the smallest unit
     /// * `recipient` - Address to receive the withdrawn funds
@@ -361,8 +367,8 @@ impl Accounts {
     /// * `Err` - Transaction failed or account not found
     pub async fn request_withdrawal(
         &self,
-        account_static_id: &str,
-        account_object_id: &str,
+        account_id: &AccountId,
+        account_object_id: &AccountObjectId,
         manager_cap_id: &str,
         amount: u64,
         recipient: &str,
@@ -370,9 +376,7 @@ impl Accounts {
         best_effort: bool,
     ) -> anyhow::Result<(u64, TransactionDigest)> {
         // Discover all markets with Pdf positions on this account
-        let market_object_ids = self
-            .get_market_object_ids_for_pdfs(account_static_id)
-            .await?;
+        let market_object_ids = self.get_market_object_ids_for_pdfs(account_id).await?;
 
         let mut builder = self.new_builder();
 

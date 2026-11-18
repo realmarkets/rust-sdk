@@ -13,7 +13,7 @@ use rust_decimal_macros::dec;
 use super::*;
 use crate::{
     api::Report,
-    common::{OrderError, OrderStatus, OrderType, Side, TimeInForce},
+    common::{MarginParameterError, OrderError, OrderStatus, OrderType, Side, TimeInForce},
 };
 
 fn frozen_order_placed() -> OrderPlaced {
@@ -156,11 +156,61 @@ fn submit_order_receipt_json_is_frozen() {
 fn cancel_order_receipt_json_is_frozen() {
     let receipt = Report::CancelOrderReport {
         orders: frozen_orders_terminated(),
+        all_markets: vec![],
     };
     assert_eq!(
         json::to_string(&receipt).unwrap(),
         format!(r#"{{"cancel_order_receipt":{{"orders":{ORDERS_TERMINATED_JSON}}}}}"#)
     );
+}
+
+// a cancel that named no market: nothing under the market it named, every
+// market it cancelled in listed after it
+#[test]
+fn cancel_order_receipt_for_every_market_json_is_frozen() {
+    let receipt = Report::CancelOrderReport {
+        orders: OrdersTerminated {
+            order_ids: vec![],
+            conditional_order_ids: vec![],
+            market: "".into(),
+            updated_at_ms: 1_700_000_000_000,
+            status: OrderStatus::Cancelled,
+            conditional_status: None,
+        },
+        all_markets: vec![
+            OrdersTerminated {
+                order_ids: vec![7],
+                conditional_order_ids: vec![],
+                market: "0xbtc".into(),
+                updated_at_ms: 1_700_000_000_000,
+                status: OrderStatus::Cancelled,
+                conditional_status: None,
+            },
+            frozen_orders_terminated(),
+        ],
+    };
+    assert_eq!(
+        json::to_string(&receipt).unwrap(),
+        format!(
+            r#"{{"cancel_order_receipt":{{"orders":{{"order_ids":[],"conditional_order_ids":[],"market":"","updated_at_ms":1700000000000,"status":"Cancelled","conditional_status":null}},"all_markets":[{{"order_ids":["7"],"conditional_order_ids":[],"market":"0xbtc","updated_at_ms":1700000000000,"status":"Cancelled","conditional_status":null}},{ORDERS_TERMINATED_JSON}]}}}}"#
+        )
+    );
+}
+
+// a receipt from a sequencer that predates `all_markets` has no such key, and
+// the SDK must still parse it
+#[test]
+fn a_cancel_receipt_without_all_markets_reads_it_as_empty() {
+    let older = format!(r#"{{"cancel_order_receipt":{{"orders":{ORDERS_TERMINATED_JSON}}}}}"#);
+    let Report::CancelOrderReport {
+        orders,
+        all_markets,
+    } = json::from_str::<Report>(&older).unwrap()
+    else {
+        panic!("expected a cancel receipt");
+    };
+    assert_eq!(orders, frozen_orders_terminated());
+    assert_eq!(all_markets, vec![]);
 }
 
 #[test]
@@ -224,6 +274,59 @@ fn order_link_json_is_frozen() {
     for (oco, expected) in ocos {
         assert_eq!(json::to_string(&oco).unwrap(), expected);
     }
+}
+
+// the variants partial liquidations added travel by name, as every other
+// variant of their enums does, and read back as themselves: clients match on
+// these strings
+#[test]
+fn liquidation_variant_names_are_frozen() {
+    assert_eq!(
+        json::to_string(&OrderType::Liquidation).unwrap(),
+        r#""Liquidation""#
+    );
+    assert_eq!(
+        json::from_str::<OrderType>(r#""Liquidation""#).unwrap(),
+        OrderType::Liquidation
+    );
+    assert_eq!(
+        json::to_string(&TradeType::LiquidationOnBook).unwrap(),
+        r#""LiquidationOnBook""#
+    );
+    assert_eq!(
+        json::from_str::<TradeType>(r#""LiquidationOnBook""#).unwrap(),
+        TradeType::LiquidationOnBook
+    );
+    assert_eq!(
+        json::to_string(&OrderError::AccountInLiquidation).unwrap(),
+        r#""AccountInLiquidation""#
+    );
+    assert_eq!(
+        json::from_str::<OrderError>(r#""AccountInLiquidation""#).unwrap(),
+        OrderError::AccountInLiquidation
+    );
+    assert_eq!(
+        json::to_string(&MarginParameterError::AccountInLiquidation).unwrap(),
+        r#""AccountInLiquidation""#
+    );
+    assert_eq!(
+        json::from_str::<MarginParameterError>(r#""AccountInLiquidation""#).unwrap(),
+        MarginParameterError::AccountInLiquidation
+    );
+}
+
+// the cancel of a closed position's conditionals travels by name, as every other
+// order error does, and reads back as itself: clients match on the string
+#[test]
+fn position_close_cancel_name_is_frozen() {
+    assert_eq!(
+        json::to_string(&OrderError::CancelledByPositionClose).unwrap(),
+        r#""CancelledByPositionClose""#
+    );
+    assert_eq!(
+        json::from_str::<OrderError>(r#""CancelledByPositionClose""#).unwrap(),
+        OrderError::CancelledByPositionClose
+    );
 }
 
 // the split matters and is easy to break silently by retyping a field: order and

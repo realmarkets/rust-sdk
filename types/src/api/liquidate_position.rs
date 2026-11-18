@@ -6,12 +6,14 @@ use crate::core::AccountId;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LiquidatePositionRequest {
+    /// The liquidator's [`AccountId`], an account of the transaction's `owner`.
     #[serde(default)]
     #[serde(alias = "a")]
     pub account: Arc<str>,
     #[serde(default)]
     #[serde(skip_serializing)]
     pub account_id: AccountId,
+    /// The [`AccountId`] of the account to liquidate, which may be anyone's.
     #[serde(default)]
     #[serde(alias = "da")]
     pub distressed_account: Arc<str>,
@@ -40,14 +42,17 @@ impl LiquidatePositionRequestBuilder {
         Self::default()
     }
 
-    /// The liquidator's account id, `0x` and 64 lower-case hex digits; the sequencer refuses any
-    /// other spelling, which [`build()`](Self::build) does not catch.
+    /// The liquidator's [`AccountId`], `0x` and 64 lower-case hex digits; the sequencer refuses
+    /// any other spelling, which [`build()`](Self::build) does not catch. Not the account's
+    /// [`AccountObjectId`](crate::core::AccountObjectId), which the sequencer refuses with
+    /// `SenderNotAllowed` (501).
     pub fn account<S: Into<String>>(mut self, account: S) -> Self {
         self.account = Some(account.into());
         self
     }
 
-    /// The distressed account's id, spelt like [`account`](Self::account).
+    /// The distressed account's [`AccountId`], spelt like [`account`](Self::account); not its
+    /// account object id.
     pub fn distressed_account<S: Into<String>>(mut self, distressed_account: S) -> Self {
         self.distressed_account = Some(distressed_account.into());
         self

@@ -365,11 +365,15 @@ impl Account {
         return Ok(mv);
     }
 
-    /// `account::trade` — one fill between `taker` and `maker`. `taker_orders` and
+    /// `account::trade_v2` — one fill between `taker` and `maker`. `taker_orders` and
     /// `maker_orders` are each side's total resting value on the side this fill consumes
     /// (the taker's `is_bid` side, the maker's other one), at 18 decimals, as it stands once
     /// the fill is out of the book; the chain applies them before pricing the position change.
-    pub async fn trade(
+    /// `is_liquidation` makes the fill an on-book liquidation of the taker: the chain borrows
+    /// the taker as `liquidate` borrows a liquidatee, moving none of its Entry Margin, and its
+    /// `Traded` carries kind 4. Such a fill meets no resting value on the taker's position, so
+    /// its `taker_orders` is 0.
+    pub async fn trade_v2(
         &self,
         builder: &mut TransactionBuilder,
         coin_type: &TypeTag,
@@ -383,6 +387,7 @@ impl Account {
         price: impl IntoArgument,
         taker_orders: impl IntoArgument,
         maker_orders: impl IntoArgument,
+        is_liquidation: bool,
         fill_id: impl IntoArgument,
         taker_revision: impl IntoArgument,
         maker_revision: impl IntoArgument,
@@ -399,6 +404,7 @@ impl Account {
         let price_arg = builder.pure(price)?;
         let taker_orders_arg = builder.pure(taker_orders)?;
         let maker_orders_arg = builder.pure(maker_orders)?;
+        let is_liquidation_arg = builder.pure(is_liquidation)?;
         let fill_id_arg = builder.pure(fill_id)?;
         let taker_revision_arg = builder.pure(taker_revision)?;
         let maker_revision_arg = builder.pure(maker_revision)?;
@@ -407,7 +413,7 @@ impl Account {
         builder.command(Command::new_move_call(
             self.exchange_package_address,
             Identifier::new("account")?,
-            Identifier::new("trade")?,
+            Identifier::new("trade_v2")?,
             vec![coin_type.clone()],
             vec![
                 taker_arg,
@@ -421,6 +427,7 @@ impl Account {
                 price_arg,
                 taker_orders_arg,
                 maker_orders_arg,
+                is_liquidation_arg,
                 fill_id_arg,
                 taker_revision_arg,
                 maker_revision_arg,

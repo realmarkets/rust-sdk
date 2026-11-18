@@ -261,6 +261,27 @@ impl IntoArgument for Vec<u8> {
     }
 }
 
+// bcs-encodes to a Move `Option<u256>` pure arg: a vector of zero or one value,
+// written as the same 32 little-endian bytes as the `U256` impl above
+impl IntoArgument for Option<U256> {
+    fn pure<C: ObjectArgCacheT>(
+        self,
+        builder: &mut ProgrammableTransactionBuilder,
+        _: &mut C,
+    ) -> anyhow::Result<Argument> {
+        return builder.pure(self.map(|value| value.to_le_bytes::<32>()));
+    }
+
+    async fn obj<C: ObjectArgCacheT>(
+        self,
+        _: &mut ProgrammableTransactionBuilder,
+        _: &mut C,
+        _: bool,
+    ) -> anyhow::Result<Argument> {
+        panic!("obj not implemented for Option<U256>");
+    }
+}
+
 // bcs-encodes to a Move `vector<ID>` pure arg — an ObjectId is an address, and an
 // ID wraps one, so the two share a serialized form
 impl IntoArgument for Vec<ObjectId> {
@@ -354,5 +375,22 @@ mod tests {
                 "{value}"
             );
         }
+    }
+
+    // a Move `Option<u256>` is a bcs vector of at most one u256, and a u256 is its
+    // 32 little-endian bytes with no length prefix
+    #[test]
+    fn optional_u256_encodes_as_a_move_option() {
+        let mut builder = ProgrammableTransactionBuilder::new();
+        None::<U256>.pure(&mut builder, &mut NoCache).unwrap();
+        Some(U256::from(0x0102u64))
+            .pure(&mut builder, &mut NoCache)
+            .unwrap();
+
+        let mut some = vec![1u8, 0x02, 0x01];
+        some.extend([0u8; 30]);
+
+        let inputs = builder.finish().inputs;
+        assert_eq!(inputs, vec![Input::Pure(vec![0u8]), Input::Pure(some)]);
     }
 }

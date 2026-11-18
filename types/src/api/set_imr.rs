@@ -42,6 +42,7 @@ pub struct SetImrRequest {
     #[serde(skip_serializing)]
     pub market_id: MarketId,
 
+    /// The account's [`AccountId`], an account of the transaction's `owner`.
     #[serde(default)]
     #[serde(alias = "sa")]
     pub account: Arc<str>,
@@ -75,15 +76,17 @@ impl SetImrRequestBuilder {
         return Self::default();
     }
 
-    /// The market's on-chain object id, `0x` and 64 lower-case hex digits; the sequencer
+    /// The exchange market ID (the indexer's `Market::id`), `0x` and 64 lower-case hex digits; the sequencer
     /// refuses any other spelling, which [`build()`](Self::build) does not catch.
     pub fn market<S: Into<String>>(mut self, market: S) -> Self {
         self.market = Some(market.into());
         self
     }
 
-    /// The account id, `0x` and 64 lower-case hex digits; the sequencer refuses any other
-    /// spelling, which [`build()`](Self::build) does not catch.
+    /// The account's [`AccountId`], `0x` and 64 lower-case hex digits; the sequencer refuses
+    /// any other spelling, which [`build()`](Self::build) does not catch. Not the account's
+    /// [`AccountObjectId`](crate::core::AccountObjectId), which the sequencer refuses with
+    /// `SenderNotAllowed` (501).
     pub fn account<S: Into<String>>(mut self, account: S) -> Self {
         self.account = Some(account.into());
         self
