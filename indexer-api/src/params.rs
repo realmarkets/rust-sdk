@@ -20,6 +20,7 @@ pub type ListInsuranceSourceCooldownsParams = PaginatedParams<ListInsuranceSourc
 pub type ListMarketInsuranceCooldownsParams = PaginatedParams<ListMarketInsuranceCooldownsFilters>;
 pub type ListLiquidationsParams = PaginatedParams<ListLiquidationsFilters>;
 pub type ListContractsPackageHistoryParams = PaginatedParams<NoFilters>;
+pub type ListAccountEventsParams = PaginatedParams<NoFilters>;
 
 /// The indexer's upper bound on `p[s]`. The `list_all_*` helpers request it so a full listing
 /// takes the fewest round trips.
@@ -257,6 +258,7 @@ impl ToQueryString for ListAccountsFilters {
 pub struct ListFillsFilters {
     pub filter_market_ids: Option<Vec<String>>,
     pub filter_order_id: Option<String>,
+    pub filter_sequencer_tx_hash: Option<String>,
     pub filter_tx_hash: Option<String>,
     pub filter_fill_types: Option<Vec<String>>,
     pub filter_created_at_from_ms: Option<u64>,
@@ -278,6 +280,13 @@ impl ListFillsFilters {
         self
     }
 
+    pub fn sequencer_tx_hash(mut self, v: impl Into<String>) -> Self {
+        self.filter_sequencer_tx_hash = Some(v.into());
+        self
+    }
+
+    /// Deprecated alias for [`sequencer_tx_hash`](Self::sequencer_tx_hash): the same filter
+    /// under its old name, which the indexer removes in v0.35.0
     pub fn tx_hash(mut self, v: impl Into<String>) -> Self {
         self.filter_tx_hash = Some(v.into());
         self
@@ -308,6 +317,9 @@ impl ToQueryString for ListFillsFilters {
         if let Some(ref v) = self.filter_order_id {
             params.push(format!("f[order_id]={}", urlencoding::encode(v)));
         }
+        if let Some(ref v) = self.filter_sequencer_tx_hash {
+            params.push(format!("f[sequencer_tx_hash]={}", urlencoding::encode(v)));
+        }
         if let Some(ref v) = self.filter_tx_hash {
             params.push(format!("f[tx_hash]={}", urlencoding::encode(v)));
         }
@@ -328,9 +340,9 @@ impl ToQueryString for ListFillsFilters {
 #[derive(Debug, Default, Clone)]
 pub struct ListLiquidationsFilters {
     pub filter_account_ids: Option<Vec<String>>,
-    pub filter_liquidator_ids: Option<Vec<String>>,
+    pub filter_requested_by_ids: Option<Vec<String>>,
     pub filter_market_ids: Option<Vec<String>>,
-    pub filter_statuses: Option<Vec<String>>,
+    pub filter_outcomes: Option<Vec<String>>,
 }
 
 impl ListLiquidationsFilters {
@@ -338,13 +350,15 @@ impl ListLiquidationsFilters {
         return Self::default();
     }
 
+    /// Liquidated accounts
     pub fn account_ids(mut self, v: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.filter_account_ids = Some(v.into_iter().map(|i| i.into()).collect());
         self
     }
 
-    pub fn liquidator_ids(mut self, v: impl IntoIterator<Item = impl Into<String>>) -> Self {
-        self.filter_liquidator_ids = Some(v.into_iter().map(|i| i.into()).collect());
+    /// Accounts that requested the liquidation
+    pub fn requested_by_ids(mut self, v: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.filter_requested_by_ids = Some(v.into_iter().map(|i| i.into()).collect());
         self
     }
 
@@ -353,8 +367,8 @@ impl ListLiquidationsFilters {
         self
     }
 
-    pub fn statuses(mut self, v: impl IntoIterator<Item = crate::LiquidationStatus>) -> Self {
-        self.filter_statuses = Some(v.into_iter().map(|s| s.to_string()).collect());
+    pub fn outcomes(mut self, v: impl IntoIterator<Item = crate::LiquidationOutcome>) -> Self {
+        self.filter_outcomes = Some(v.into_iter().map(|s| s.to_string()).collect());
         self
     }
 }
@@ -365,14 +379,14 @@ impl ToQueryString for ListLiquidationsFilters {
         if let Some(ref v) = self.filter_account_ids {
             params.push(format!("f[account_ids]={}", v.join(",")));
         }
-        if let Some(ref v) = self.filter_liquidator_ids {
-            params.push(format!("f[liquidator_ids]={}", v.join(",")));
+        if let Some(ref v) = self.filter_requested_by_ids {
+            params.push(format!("f[requested_by_ids]={}", v.join(",")));
         }
         if let Some(ref v) = self.filter_market_ids {
             params.push(format!("f[market_ids]={}", v.join(",")));
         }
-        if let Some(ref v) = self.filter_statuses {
-            params.push(format!("f[statuses]={}", v.join(",")));
+        if let Some(ref v) = self.filter_outcomes {
+            params.push(format!("f[outcomes]={}", v.join(",")));
         }
         return params.join("&");
     }

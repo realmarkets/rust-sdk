@@ -1,7 +1,7 @@
 //! The chain CLI's file keystore, ported from the reference keystore crate so
 //! the public SDK can read and write it without the node's monorepo.
 //!
-//! The API is a drop-in for the reference crate at v1.34: the same types,
+//! The API is a drop-in for the reference crate at v1.36: the same types,
 //! trait methods, signatures (`anyhow::Error`, and `signature::Error` from the
 //! `sign_*` methods) and error text, on the same key-derivation crates, so a
 //! mnemonic, a seed or a file means the same thing to both. The one swapped

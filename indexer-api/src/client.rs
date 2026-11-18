@@ -641,6 +641,44 @@ impl Client {
         Ok(wrapper.data)
     }
 
+    /// List the events of one account (deposits, withdrawal requests and terminal steps,
+    /// finished liquidations of each market of a round), newest first by default.
+    ///
+    /// The feed is ordered by the instant of each event and holds only the events the indexer
+    /// applied after the feed was deployed: there is no history before that point. A
+    /// liquidation entry ends the round on its market; it does not say the account is safe.
+    pub async fn list_account_events(
+        &self,
+        account_id: &str,
+        params: ListAccountEventsParams,
+    ) -> IndexerResult<ListAccountEventsResponse> {
+        let mut url = format!("{}/api/v1/accounts/{}/events", self.base_url, account_id);
+
+        let query_string = params.to_query_string();
+        if !query_string.is_empty() {
+            url.push('?');
+            url.push_str(&query_string);
+        }
+
+        let response = self.client.get(&url).send().await?;
+        return self.handle_response(response).await;
+    }
+
+    /// List all events of one account by automatically paginating through all pages
+    pub async fn list_all_account_events(
+        &self,
+        account_id: &str,
+    ) -> IndexerResult<Vec<AccountEventEnvelope>> {
+        let filters: Option<NoFilters> = None;
+        paginate!(
+            self,
+            ListAccountEventsParams,
+            filters,
+            list_account_events,
+            account_id
+        )
+    }
+
     /// List open and pending positions with optional filters and pagination
     pub async fn list_positions_live(
         &self,
@@ -942,11 +980,21 @@ mod tests {
     };
 
     use reqwest::StatusCode;
+    use rust_decimal_macros::dec;
 
     use super::{Client, Duration, parse_api_response};
     use crate::{
         error::Error,
-        types::{Code, ListAccountsResponse, ListMarketsResponse, MarketTradingMode},
+        params::{ListFillsFilters, ListLiquidationsFilters},
+        types::{
+            AccountEvent, AccountEventType, AccountFeeRate, AccountFees, Code, Direction,
+            LiquidatedPosition, Liquidation, LiquidationAdlClose, LiquidationAdlFill,
+            LiquidationInsuranceClose, LiquidationMarginGroup, LiquidationOnBookClose,
+            LiquidationOutcome, LiquidationOutcomeDetail, LiquidationTakeoverClose,
+            LiquidationTakeoverReason, LiquidationTrigger, ListAccountEventsResponse,
+            ListAccountsResponse, ListLiquidationsResponse, ListMarketsResponse, MarketTradingMode,
+            PartialLiquidationCompleted, WithdrawalRejected, WithdrawalStatus,
+        },
     };
 
     /// Accept connections and never answer, holding them open so a client waits on a response
@@ -1134,6 +1182,286 @@ mod tests {
         assert_eq!(account.registered_at_ms, None);
         assert!(account.settled_balances.is_empty());
         assert!(!account.is_withdrawal_safeguard_exempt);
+        assert!(account.fees.is_empty());
+        assert_eq!(account.available_balance_for_trading, None);
+        assert_eq!(account.available_balance_for_withdrawals, None);
+    }
+
+    #[test]
+    fn an_account_decodes_its_fees_and_both_available_balances() {
+        let body = br#"{"data":[{"node_state_version":"21793","id":"0xacc","account_object_id":"0xobj","created_at_ms":1792003084156,"registered_at_ms":1792003084156,"updated_at_ms":1792003735927,"address":"0xowner","account_index":"3","asset_id":"0x2::usdc::USDC","unrealised_pnl":"0","realised_pnl":"0","equity":"100","margin_allocated_cross_contracts":null,"margin_allocated_isolated_contracts":null,"margin_allocated_orders":null,"available_balance":"90","available_balance_for_trading":"90","available_balance_for_withdrawals":"75","settled_balances":[],"can_deposit":true,"can_withdraw":true,"can_trade":true,"is_rate_limit_exempt":false,"is_deposit_limit_exempt":false,"is_withdrawal_safeguard_exempt":false,"order_indexing_suspended":false,"cooldown_withdrawal_count":0,"cooldown_withdrawal_total":"0","account_withdrawal_count_delay_active":false,"account_cumulative_withdrawal_delay_active":false,"values_refreshed_at_ms":1792003735927,"maker_fee_tier":3,"taker_fee_tier":3,"discount_tier":1,"fees":[{"fee_config_id":"0xfee","maker":{"tier":3,"rate":"-0.0001","discount":"1"},"taker":{"tier":3,"rate":"0.00036","discount":"0.9"}}]}],"pagination":{"next_cursor":null}}"#;
+
+        let resp: ListAccountsResponse = parse_api_response(StatusCode::OK, body).unwrap();
+
+        let [account] = resp.data.as_slice() else {
+            panic!("expected one account, got {}", resp.data.len());
+        };
+        assert_eq!(account.available_balance, Some(dec!(90)));
+        assert_eq!(account.available_balance_for_trading, Some(dec!(90)));
+        assert_eq!(account.available_balance_for_withdrawals, Some(dec!(75)));
+        assert_eq!(
+            account.fees,
+            vec![AccountFees {
+                fee_config_id: "0xfee".to_string(),
+                maker: AccountFeeRate {
+                    tier: 3,
+                    rate: dec!(-0.0001),
+                    discount: dec!(1),
+                },
+                taker: AccountFeeRate {
+                    tier: 3,
+                    rate: dec!(0.00036),
+                    discount: dec!(0.9),
+                },
+            }]
+        );
+    }
+
+    // the second row is one the indexer stored before v0.34.0, from an engine up to v0.31.x:
+    // every field it could not know is null
+    #[test]
+    fn a_liquidation_page_decodes_a_current_round_and_an_old_one() {
+        let body = br#"{"data":[{"liquidation_id":7,"market_id":"0xbtc","account_id":"0xacc","margin_group":"Cross","trigger":"OwnOrder","requested_by":null,"mark_price":"61250.5","cancelled_order_ids":["834604701"],"cancelled_conditional_ids":[],"position_before":{"direction":"Long","size":"0.5","revision":41},"position_after":{"direction":"Long","size":"0.1","revision":42},"outcome":"OnBook","outcome_detail":{"order_id":"834604710","limit_price":"60900","requested":"0.5","filled":"0.4","trade_ids":[834604724,834604725]},"trade_ids":[834604724,834604725],"created_at_ms":1735689600000,"sequencer_tx_hash":"0xstx","node_state_version":"12345678"},{"liquidation_id":6,"market_id":"0xeth","account_id":"0xacc","margin_group":null,"trigger":"Requested","requested_by":"0xreq","mark_price":null,"cancelled_order_ids":null,"cancelled_conditional_ids":null,"position_before":null,"position_after":null,"outcome":"OrdersCancelled","outcome_detail":null,"trade_ids":[],"created_at_ms":1735689500000,"sequencer_tx_hash":null,"node_state_version":"12345600"}],"pagination":{"next_cursor":null}}"#;
+
+        let resp: ListLiquidationsResponse = parse_api_response(StatusCode::OK, body).unwrap();
+
+        assert_eq!(
+            resp.data,
+            vec![
+                Liquidation {
+                    node_state_version: "12345678".to_string(),
+                    liquidation_id: 7,
+                    market_id: "0xbtc".to_string(),
+                    account_id: "0xacc".to_string(),
+                    margin_group: Some(LiquidationMarginGroup::Cross),
+                    trigger: LiquidationTrigger::OwnOrder,
+                    requested_by: None,
+                    mark_price: Some(dec!(61250.5)),
+                    cancelled_order_ids: Some(vec!["834604701".to_string()]),
+                    cancelled_conditional_ids: Some(vec![]),
+                    position_before: Some(LiquidatedPosition {
+                        direction: Some(Direction::Long),
+                        size: dec!(0.5),
+                        revision: 41,
+                    }),
+                    position_after: Some(LiquidatedPosition {
+                        direction: Some(Direction::Long),
+                        size: dec!(0.1),
+                        revision: 42,
+                    }),
+                    outcome: LiquidationOutcome::OnBook,
+                    outcome_detail: Some(LiquidationOutcomeDetail::OnBook(
+                        LiquidationOnBookClose {
+                            order_id: "834604710".to_string(),
+                            limit_price: dec!(60900),
+                            requested: dec!(0.5),
+                            filled: dec!(0.4),
+                            trade_ids: vec![834604724, 834604725],
+                        }
+                    )),
+                    trade_ids: vec![834604724, 834604725],
+                    created_at_ms: 1735689600000,
+                    sequencer_tx_hash: Some("0xstx".to_string()),
+                },
+                Liquidation {
+                    node_state_version: "12345600".to_string(),
+                    liquidation_id: 6,
+                    market_id: "0xeth".to_string(),
+                    account_id: "0xacc".to_string(),
+                    margin_group: None,
+                    trigger: LiquidationTrigger::Requested,
+                    requested_by: Some("0xreq".to_string()),
+                    mark_price: None,
+                    cancelled_order_ids: None,
+                    cancelled_conditional_ids: None,
+                    position_before: None,
+                    position_after: None,
+                    outcome: LiquidationOutcome::OrdersCancelled,
+                    outcome_detail: None,
+                    trade_ids: vec![],
+                    created_at_ms: 1735689500000,
+                    sequencer_tx_hash: None,
+                },
+            ]
+        );
+    }
+
+    // the closes carry no tag: a takeover payload also satisfies the insurance close once its
+    // `reason` and `buffer` are ignored, so decoding it as a takeover pins the variant order
+    #[test]
+    fn each_liquidation_close_decodes_to_its_own_variant() {
+        let takeover = r#"{"reason":"LargePosition","liquidator_id":"0xliq","trade_id":834604724,"size":"0.5","price":"61100","buffer":"12.5"}"#;
+        let insurance = r#"{"liquidator_id":"0xliq","trade_id":834604724,"size":"0.5","price":"61100","fund":"0xfund","shortfall":"40"}"#;
+        let adl = r#"{"price":null,"debt":"40","fills":[{"counterparty_id":"0xcp","trade_id":834604724,"size":"0.25"}]}"#;
+
+        assert_eq!(
+            json::from_str::<LiquidationOutcomeDetail>(takeover).unwrap(),
+            LiquidationOutcomeDetail::Takeover(LiquidationTakeoverClose {
+                reason: LiquidationTakeoverReason::LargePosition,
+                liquidator_id: "0xliq".to_string(),
+                trade_id: 834604724,
+                size: dec!(0.5),
+                price: dec!(61100),
+                buffer: Some(dec!(12.5)),
+            })
+        );
+        assert_eq!(
+            json::from_str::<LiquidationOutcomeDetail>(insurance).unwrap(),
+            LiquidationOutcomeDetail::InsuranceTakeover(LiquidationInsuranceClose {
+                liquidator_id: "0xliq".to_string(),
+                trade_id: 834604724,
+                size: dec!(0.5),
+                price: dec!(61100),
+                fund: Some("0xfund".to_string()),
+                shortfall: Some(dec!(40)),
+            })
+        );
+        assert_eq!(
+            json::from_str::<LiquidationOutcomeDetail>(adl).unwrap(),
+            LiquidationOutcomeDetail::Adl(LiquidationAdlClose {
+                price: None,
+                debt: Some(dec!(40)),
+                fills: vec![LiquidationAdlFill {
+                    counterparty_id: "0xcp".to_string(),
+                    trade_id: 834604724,
+                    size: dec!(0.25),
+                }],
+            })
+        );
+    }
+
+    fn account_event_kind(event: &AccountEvent) -> AccountEventType {
+        return match event {
+            AccountEvent::DepositCompleted(_) => AccountEventType::DepositCompleted,
+            AccountEvent::WithdrawalRequested(_) => AccountEventType::WithdrawalRequested,
+            AccountEvent::WithdrawalCompleted(_) => AccountEventType::WithdrawalCompleted,
+            AccountEvent::WithdrawalRejected(_) => AccountEventType::WithdrawalRejected,
+            AccountEvent::OrderLiquidationCompleted(_) => {
+                AccountEventType::OrderLiquidationCompleted
+            }
+            AccountEvent::BackstopLiquidationCompleted(_) => {
+                AccountEventType::BackstopLiquidationCompleted
+            }
+            AccountEvent::PartialLiquidationCompleted(_) => {
+                AccountEventType::PartialLiquidationCompleted
+            }
+        };
+    }
+
+    // `data` carries no tag: every shape must land in the variant its envelope's `type` names
+    #[test]
+    fn every_account_event_decodes_to_the_variant_its_type_names() {
+        let body = br#"{"data":[{"type":"DepositCompleted","version":1,"data":{"id":"0001","settlement_tx_hash":"0xdep","account_id":"0xacc","amount":"1000.5","deposited_at_ms":1735689600000,"node_state_version":"12345678"}},{"type":"WithdrawalRequested","version":1,"data":{"account_id":"0xacc","nonce":4,"amount_requested":"500","initiated_at_ms":1735689650000,"release_at_timestamp_ms":1735689650000,"request_tx_hash":"0xreq"}},{"type":"WithdrawalCompleted","version":1,"data":{"account_id":"0xacc","nonce":4,"amount_withdrawn":"500","completion_status":"Success","completed_at_ms":1735689700000,"completion_tx_hash":"0xdone"}},{"type":"WithdrawalRejected","version":1,"data":{"account_id":"0xacc","nonce":5,"amount_requested":"200","status":"Expired","completion_status":null,"completed_at_ms":1735689750000,"completion_tx_hash":"0xexp"}},{"type":"OrderLiquidationCompleted","version":1,"data":{"liquidation_id":12,"market_id":"0xbtc","account_id":"0xacc","cancelled_order_ids":["834604701"],"created_at_ms":1735689800000}},{"type":"BackstopLiquidationCompleted","version":1,"data":{"liquidation_id":13,"market_id":"0xbtc","account_id":"0xacc","outcome":"Takeover","outcome_detail":{"reason":"Backstop","liquidator_id":"0xliq","trade_id":834604724,"size":"2.5","price":"61200","buffer":null},"position_before":{"direction":"Long","size":"2.5","revision":7},"created_at_ms":1735689850000}},{"type":"PartialLiquidationCompleted","version":1,"data":{"liquidation_id":14,"market_id":"0xbtc","account_id":"0xacc","position_before":{"direction":"Long","size":"0.5","revision":41},"position_after":{"direction":"Long","size":"0.1","revision":42},"created_at_ms":1735689900000}}],"pagination":{"next_cursor":null}}"#;
+
+        let resp: ListAccountEventsResponse = parse_api_response(StatusCode::OK, body).unwrap();
+
+        let decoded: Vec<AccountEventType> = resp
+            .data
+            .iter()
+            .map(|e| account_event_kind(&e.data))
+            .collect();
+        let tagged: Vec<AccountEventType> =
+            resp.data.iter().map(|e| e.event_type.clone()).collect();
+        assert_eq!(decoded, tagged);
+        assert_eq!(
+            tagged,
+            vec![
+                AccountEventType::DepositCompleted,
+                AccountEventType::WithdrawalRequested,
+                AccountEventType::WithdrawalCompleted,
+                AccountEventType::WithdrawalRejected,
+                AccountEventType::OrderLiquidationCompleted,
+                AccountEventType::BackstopLiquidationCompleted,
+                AccountEventType::PartialLiquidationCompleted,
+            ]
+        );
+        assert_eq!(
+            resp.data[3].data,
+            AccountEvent::WithdrawalRejected(WithdrawalRejected {
+                account_id: "0xacc".to_string(),
+                nonce: 5,
+                amount_requested: dec!(200),
+                status: WithdrawalStatus::Expired,
+                completion_status: None,
+                completed_at_ms: 1735689750000,
+                completion_tx_hash: "0xexp".to_string(),
+            })
+        );
+        assert_eq!(
+            resp.data[6].data,
+            AccountEvent::PartialLiquidationCompleted(PartialLiquidationCompleted {
+                liquidation_id: 14,
+                market_id: "0xbtc".to_string(),
+                account_id: "0xacc".to_string(),
+                position_before: Some(LiquidatedPosition {
+                    direction: Some(Direction::Long),
+                    size: dec!(0.5),
+                    revision: 41,
+                }),
+                position_after: Some(LiquidatedPosition {
+                    direction: Some(Direction::Long),
+                    size: dec!(0.1),
+                    revision: 42,
+                }),
+                created_at_ms: 1735689900000,
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn account_events_listing_requests_the_accounts_feed() {
+        let (base_url, request_target) =
+            one_shot_server(r#"{"data":[],"pagination":{"next_cursor":null}}"#);
+        let client = Client::new(base_url, "ws://127.0.0.1:1").expect("build client");
+
+        let events = client
+            .list_all_account_events("0xacc")
+            .await
+            .expect("list account events");
+
+        assert!(events.is_empty());
+        assert_eq!(
+            request_target.recv().expect("the listing sent one request"),
+            "/api/v1/accounts/0xacc/events?p[s]=1000"
+        );
+    }
+
+    #[tokio::test]
+    async fn liquidation_filters_send_the_requester_and_outcome_names() {
+        let (base_url, request_target) =
+            one_shot_server(r#"{"data":[],"pagination":{"next_cursor":null}}"#);
+        let client = Client::new(base_url, "ws://127.0.0.1:1").expect("build client");
+        let filters = ListLiquidationsFilters::new()
+            .requested_by_ids(["0xreq"])
+            .outcomes([LiquidationOutcome::Adl, LiquidationOutcome::OnBook]);
+
+        client
+            .list_all_liquidations(Some(filters))
+            .await
+            .expect("list liquidations");
+
+        assert_eq!(
+            request_target.recv().expect("the listing sent one request"),
+            "/api/v1/liquidations?p[s]=1000&f[requested_by_ids]=0xreq&f[outcomes]=Adl,OnBook"
+        );
+    }
+
+    #[tokio::test]
+    async fn fill_filter_sends_the_sequencer_tx_hash() {
+        let (base_url, request_target) =
+            one_shot_server(r#"{"data":[],"pagination":{"next_cursor":null}}"#);
+        let client = Client::new(base_url, "ws://127.0.0.1:1").expect("build client");
+        let filters = ListFillsFilters::new().sequencer_tx_hash("0xstx");
+
+        client
+            .list_all_fills("0xacc", Some(filters))
+            .await
+            .expect("list fills");
+
+        assert_eq!(
+            request_target.recv().expect("the listing sent one request"),
+            "/api/v1/accounts/0xacc/fills?p[s]=1000&f[sequencer_tx_hash]=0xstx"
+        );
     }
 
     #[test]

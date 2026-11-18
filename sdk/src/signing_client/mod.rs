@@ -38,7 +38,8 @@
 //!     // Create a testnet client
 //!     let client = SigningClient::new_testnet(signer)?;
 //!
-//!     // `market` and `account` are `0x`-prefixed on-chain object ids
+//!     // `market` is the market's object id, `account` the account's id (not its
+//!     // account object id); both `0x`-prefixed hex
 //!     let order = SubmitOrderRequest::builder()
 //!         .market("0x5efc5ad00c209baf4c5d77dfd1be18e8b50916e53adbe2142ae1b47af445303c")
 //!         .account("0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a")
@@ -289,8 +290,9 @@ impl SigningClient {
     /// use sdk::{SigningClient, types::SubmitOrderRequest};
     ///
     /// # async fn example(client: SigningClient) -> anyhow::Result<()> {
-    /// // Submit a market buy order. `market` and `account` are `0x`-prefixed
-    /// // on-chain object ids — a ticker symbol fails in `build()`.
+    /// // Submit a market buy order. `market` is the market's object id and
+    /// // `account` the account's id, not its account object id; both are
+    /// // `0x`-prefixed hex, and a ticker symbol fails in `build()`.
     /// let market_order = SubmitOrderRequest::builder()
     ///     .market("0x5efc5ad00c209baf4c5d77dfd1be18e8b50916e53adbe2142ae1b47af445303c")
     ///     .account("0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a")
@@ -385,6 +387,16 @@ impl SigningClient {
     ///     .cancel_order(cancel_all, Some("cancel-all-001".to_string()))
     ///     .await?;
     /// println!("Cancel all result: {:?}", report);
+    ///
+    /// // `all_markets` in place of a market cancels every order the account holds
+    /// // anywhere; the receipt lists each market under `all_markets`
+    /// let cancel_everywhere = CancelOrderRequest::builder()
+    ///     .all_markets()
+    ///     .account("0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a")
+    ///     .build()?;
+    ///
+    /// let report = client.cancel_order(cancel_everywhere, None).await?;
+    /// println!("Cancel everywhere result: {:?}", report);
     /// # Ok(())
     /// # }
     /// ```
@@ -422,8 +434,9 @@ impl SigningClient {
     ///
     /// # Arguments
     ///
-    /// * `liquidation` - `account` is the caller triggering the liquidation and
-    ///   `distressed_account` the account to be liquidated; both are required
+    /// * `liquidation` - `account` is the caller's own account triggering the
+    ///   liquidation and `distressed_account` the account to be liquidated; both
+    ///   are required, and both are account ids, not account object ids
     /// * `client_request_id` - Optional unique identifier for tracking this request
     ///
     /// # Returns
@@ -753,12 +766,15 @@ impl SigningClient {
     ///
     /// # Returns
     ///
-    /// * `Ok(HealthCheck)` - The node answered. `status` is a constant `true` on
-    ///   any node that answers at all, so the liveness signal is the other four
-    ///   fields: `sequencer_height` / `sequencer_ts` (the last block the engine
-    ///   opened and its unix-millisecond timestamp) and `settlement_chain_height`
-    ///   / `settlement_chain_ts` (the last settlement-chain checkpoint ingested).
-    ///   A node that has not produced a block yet reports zeros.
+    /// * `Ok(HealthCheck)` - The node answered. `status` is `true` while the
+    ///   last block the engine applied is at most the node's configured age
+    ///   (10 s by default) old by its clock,
+    ///   and `false` while it has applied none, is catching up, or has stopped
+    ///   receiving blocks. The other four fields are `sequencer_height` /
+    ///   `sequencer_ts` (that block and its unix-millisecond timestamp) and
+    ///   `settlement_chain_height` / `settlement_chain_ts` (the last
+    ///   settlement-chain checkpoint ingested). A node that has not applied a
+    ///   block yet reports zeros.
     /// * `Err(_)` - Network error or failed to reach the matching engine
     ///
     /// # Examples
@@ -767,9 +783,10 @@ impl SigningClient {
     /// use sdk::{SigningClient, types::SubmitOrderRequest};
     ///
     /// # async fn example(client: SigningClient, order: SubmitOrderRequest) -> anyhow::Result<()> {
-    /// // Check health before trading. `status` is always true on a node that
-    /// // answers, so what tells you the engine is live is the heights moving.
+    /// // Check health before trading: `status` is false on a node that is not
+    /// // applying the live chain.
     /// let health = client.healthcheck().await?;
+    /// anyhow::ensure!(health.status, "sequencer is not applying blocks");
     /// println!(
     ///     "sequencer {}@{} ms, settlement chain {}@{} ms",
     ///     health.sequencer_height,

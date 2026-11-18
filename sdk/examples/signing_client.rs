@@ -6,6 +6,7 @@ use sdk::{
     types::{CancelOrderRequest, Command, SubmitOrderRequest},
 };
 
+// the account id (dex's `AccountDetails::account_id`), not the account object id
 const ACCOUNT: &str = "0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a";
 
 // A private key with the following format could be used as well.

@@ -6,7 +6,9 @@
 //!
 //! # Key Features
 //!
-//! - **Account Management**: Create and manage trading accounts on-chain
+//! - **Account Management**: Create and manage trading accounts on-chain. This crate's
+//!   calls take an account's [`AccountObjectId`](account::AccountObjectId); the sequencer's
+//!   orders take its other id, the [`AccountId`](account::AccountId)
 //! - **Network Support**: Connect to devnet, testnet, mainnet, or custom networks
 //! - **Programmable Transaction Blocks**: Build complex multi-step transactions
 //! - **Soul-Bound Tokens**: Manager capabilities for account administration

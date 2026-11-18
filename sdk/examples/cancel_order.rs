@@ -9,6 +9,7 @@ use sdk::{
     types::{CancelOrderRequest, Transaction, TransactionPayload},
 };
 
+// the account id (dex's `AccountDetails::account_id`), not the account object id
 const ACCOUNT: &str = "0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a";
 
 // must match the chain id the node reports over `real_chainId`, or the
@@ -38,7 +39,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .market("0x5efc5ad00c209baf4c5d77dfd1be18e8b50916e53adbe2142ae1b47af445303c")
         .account(ACCOUNT)
         // NOTE: order_id is optional, not setting it will
-        // cancel all orders for the given market at once
+        // cancel all orders for the given market at once;
+        // .all_markets() in place of .market(..) cancels
+        // them in every market
         .order_id(123456789)
         .build()?;
 

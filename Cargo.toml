@@ -55,13 +55,13 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "69d496c7
 futures-util = "0.3"
 hkdf = "0.12.4"
 indexmap = "2.13.0"
-iota-sdk-crypto = { version = "1.0.0-rc.1", default-features = false, features = [
+iota-sdk-crypto = { version = "1.0.0-rc.2", default-features = false, features = [
   "bech32",
   "ed25519",
 ] }
-iota-sdk-grpc-client = "1.0.0-rc.1"
+iota-sdk-grpc-client = "1.0.0-rc.2"
 iota-sdk-grpc-types = "1.0.0-rc.1"
-iota-sdk-types = { version = "1.0.0-rc.1", features = ["hash", "serde"] }
+iota-sdk-types = { version = "1.0.0-rc.2", features = ["hash", "serde"] }
 # `sdk` is the only consumer and uses only `HttpClient`, `ClientT` and
 # `rpc_params!`. The monorepo also enables `server`/`macros` for the sequencer's
 # own RPC; asking for them here would pull jsonrpsee-server, the proc macros and

@@ -164,6 +164,10 @@ pub enum ErrorString {
     /// Order type (market/limit) was not specified
     #[serde(rename = "missing order type")]
     MissingOrderType,
+    /// A submitted order used the liquidation order type, which only the engine
+    /// places
+    #[serde(rename = "liquidation order type not allowed")]
+    LiquidationOrderTypeNotAllowed,
     /// Market orders should not include a price parameter
     #[serde(rename = "unexpected price for market order")]
     UnexpectedPriceForMarketOrder,
@@ -291,7 +295,8 @@ pub enum ErrorString {
     /// settle_market price is not a valid decimal
     #[serde(rename = "settle_market invalid price")]
     SettleMarketInvalidPrice,
-    /// The transaction sender is not authorized
+    /// The command's account is not an account of the transaction's owner; see
+    /// [`ERROR_SENDER_NOT_ALLOWED`]
     #[serde(rename = "sender not allowed")]
     SenderNotAllowed,
     /// An account id is not `0x` followed by 64 lowercase hex digits
@@ -300,7 +305,7 @@ pub enum ErrorString {
     /// A market id is not `0x` followed by 64 lowercase hex digits
     #[serde(rename = "market id not canonical")]
     NonCanonicalMarketId,
-    /// Trailing stop triggers are not supported yet
+    /// Reserved: trailing stop triggers are supported and nothing emits this today
     #[serde(rename = "trailing stop triggers not supported")]
     TrailingStopTriggersNotSupported,
     /// Index reference price is not supported yet
@@ -357,7 +362,7 @@ pub enum ErrorString {
     /// its own, or that an earlier order already names
     #[serde(rename = "oco link references an order already linked")]
     OcoPartnerAlreadyLinked,
-    /// An OCO link named an order of the same transaction on the other side
+    /// Reserved: an OCO pair may be on either side and nothing emits this today
     #[serde(rename = "oco link references an order on the other side")]
     OcoPartnerSideMismatch,
     /// An OCO link named an order of the same transaction with the same trigger
@@ -404,6 +409,30 @@ pub enum ErrorString {
     /// Trigger price is not a multiple of the market's tick size
     #[serde(rename = "trigger price is not a multiple of tick size")]
     TriggerPriceNotMultipleOfTickSize,
+    /// A numeric trailing distance is not a valid decimal
+    #[serde(rename = "invalid trailing distance")]
+    InvalidTrailingDistance,
+    /// A numeric trailing distance cannot be zero
+    #[serde(rename = "trailing distance cannot be zero")]
+    TrailingDistanceCannotBeZero,
+    /// A numeric trailing distance must be positive
+    #[serde(rename = "trailing distance must be positive")]
+    TrailingDistanceMustBePositive,
+    /// A numeric trailing distance exceeds the market's price decimal places
+    #[serde(rename = "trailing distance has too many decimal places")]
+    TrailingDistanceHasTooManyDecimalPlaces,
+    /// A numeric trailing distance is not a multiple of the market's tick size
+    #[serde(rename = "trailing distance is not a multiple of tick size")]
+    TrailingDistanceNotMultipleOfTickSize,
+    /// A trailing percentage is not a valid decimal
+    #[serde(rename = "invalid trailing percentage")]
+    InvalidTrailingPercentage,
+    /// A trailing percentage is not greater than 0 and less than 1
+    #[serde(rename = "trailing percentage must be greater than 0 and less than 1")]
+    TrailingPercentageOutOfRange,
+    /// A trailing percentage is not a whole number of basis points
+    #[serde(rename = "trailing percentage has too many decimal places")]
+    TrailingPercentageHasTooManyDecimalPlaces,
     /// Order's notional value (price × quantity) is below the market's minimum
     #[serde(rename = "order value below market minimum")]
     OrderBelowMinimumOrderValue,
@@ -659,7 +688,9 @@ pub const ERROR_SUBMIT_ORDER_PERSISTENT_MARKET_ORDER: Error = Error {
     details: None,
 };
 
-/// Error 125: Trailing stop triggers are not supported yet
+/// Error 125: reserved. Trailing stop triggers are supported today and nothing
+/// emits this code; it stays as wire vocabulary for a deployment that disables
+/// the feature.
 pub const ERROR_CONDITIONAL_TRAILING_STOP_NOT_SUPPORTED: Error = Error {
     error_code: 125,
     error_string: ErrorString::TrailingStopTriggersNotSupported,
@@ -932,8 +963,8 @@ pub const ERROR_CONDITIONAL_OCO_PARTNER_ALREADY_LINKED: Error = Error {
     details: None,
 };
 
-/// Error 163: an OCO link names an order of the same transaction on the other
-/// side
+/// Error 163: reserved. An OCO pair may be on either side and nothing emits
+/// this code; it stays as wire vocabulary.
 pub const ERROR_CONDITIONAL_OCO_PARTNER_SIDE_MISMATCH: Error = Error {
     error_code: 163,
     error_string: ErrorString::OcoPartnerSideMismatch,
@@ -968,6 +999,73 @@ pub const ERROR_CONDITIONAL_ORDER_LINK_CLIENT_ORDER_ID_TOO_LONG: Error = Error {
 pub const ERROR_CONDITIONAL_OCO_CLIENT_ORDER_ID_TOO_LONG: Error = Error {
     error_code: 167,
     error_string: ErrorString::OcoClientOrderIdTooLong,
+    details: None,
+};
+
+/// Error 168: a submitted order used the liquidation order type, which only the
+/// engine places
+pub const ERROR_SUBMIT_ORDER_LIQUIDATION_ORDER_TYPE: Error = Error {
+    error_code: 168,
+    error_string: ErrorString::LiquidationOrderTypeNotAllowed,
+    details: None,
+};
+
+/// Error 169: a numeric trailing distance is not a valid decimal
+pub const ERROR_CONDITIONAL_INVALID_TRAILING_DISTANCE: Error = Error {
+    error_code: 169,
+    error_string: ErrorString::InvalidTrailingDistance,
+    details: None,
+};
+
+/// Error 170: a numeric trailing distance is zero
+pub const ERROR_CONDITIONAL_TRAILING_DISTANCE_ZERO: Error = Error {
+    error_code: 170,
+    error_string: ErrorString::TrailingDistanceCannotBeZero,
+    details: None,
+};
+
+/// Error 171: a numeric trailing distance is negative
+pub const ERROR_CONDITIONAL_TRAILING_DISTANCE_MUST_BE_POSITIVE: Error = Error {
+    error_code: 171,
+    error_string: ErrorString::TrailingDistanceMustBePositive,
+    details: None,
+};
+
+/// Error 172: a numeric trailing distance has more decimal places than the
+/// market's prices
+pub const ERROR_CONDITIONAL_TRAILING_DISTANCE_TOO_MANY_DECIMAL_PLACES: Error = Error {
+    error_code: 172,
+    error_string: ErrorString::TrailingDistanceHasTooManyDecimalPlaces,
+    details: None,
+};
+
+/// Error 173: a numeric trailing distance is not a multiple of the market's tick
+/// size
+pub const ERROR_CONDITIONAL_TRAILING_DISTANCE_NOT_MULTIPLE_OF_TICK_SIZE: Error = Error {
+    error_code: 173,
+    error_string: ErrorString::TrailingDistanceNotMultipleOfTickSize,
+    details: None,
+};
+
+/// Error 174: a trailing percentage is not a valid decimal
+pub const ERROR_CONDITIONAL_INVALID_TRAILING_PERCENTAGE: Error = Error {
+    error_code: 174,
+    error_string: ErrorString::InvalidTrailingPercentage,
+    details: None,
+};
+
+/// Error 175: a trailing percentage is not greater than 0 and less than 1
+pub const ERROR_CONDITIONAL_TRAILING_PERCENTAGE_OUT_OF_RANGE: Error = Error {
+    error_code: 175,
+    error_string: ErrorString::TrailingPercentageOutOfRange,
+    details: None,
+};
+
+/// Error 176: a trailing percentage has more than
+/// `MAX_TRAILING_PERCENTAGE_DECIMAL_PLACES` decimal places
+pub const ERROR_CONDITIONAL_TRAILING_PERCENTAGE_TOO_MANY_DECIMAL_PLACES: Error = Error {
+    error_code: 176,
+    error_string: ErrorString::TrailingPercentageHasTooManyDecimalPlaces,
     details: None,
 };
 
@@ -1152,7 +1250,10 @@ pub const ERROR_NO_COMMANDS: Error = Error {
 
 // Authentication/Authorization Errors (500-599)
 
-/// Error 501: The transaction sender is not authorized to perform this operation
+/// Error 501: The command's `account` is not the [`AccountId`](crate::core::AccountId)
+/// of an account registered to the transaction's `owner`. One cause is the account's
+/// [`AccountObjectId`](crate::core::AccountObjectId) in its place: both are `0x` and
+/// 64 hex digits, and only the account id names the account here.
 pub const ERROR_SENDER_NOT_ALLOWED: Error = Error {
     error_code: 501,
     error_string: ErrorString::SenderNotAllowed,

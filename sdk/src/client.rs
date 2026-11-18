@@ -358,12 +358,15 @@ impl Client {
     ///
     /// # Returns
     ///
-    /// * `Ok(HealthCheck)` - The node answered. `status` is a constant `true` on
-    ///   any node that answers at all, so the liveness signal is the other four
-    ///   fields: `sequencer_height` / `sequencer_ts` (the last block the engine
-    ///   opened and its unix-millisecond timestamp) and `settlement_chain_height`
-    ///   / `settlement_chain_ts` (the last settlement-chain checkpoint ingested).
-    ///   A node that has not produced a block yet reports zeros.
+    /// * `Ok(HealthCheck)` - The node answered. `status` is `true` while the
+    ///   last block the engine applied is at most the node's configured age
+    ///   (10 s by default) old by its clock,
+    ///   and `false` while it has applied none, is catching up, or has stopped
+    ///   receiving blocks. The other four fields are `sequencer_height` /
+    ///   `sequencer_ts` (that block and its unix-millisecond timestamp) and
+    ///   `settlement_chain_height` / `settlement_chain_ts` (the last
+    ///   settlement-chain checkpoint ingested). A node that has not applied a
+    ///   block yet reports zeros.
     /// * `Err(_)` - Network error or failed to reach the matching engine
     ///
     /// # Examples

@@ -7,7 +7,7 @@ use anyhow::{Context, anyhow, bail};
 use iota_sdk_types::{Address, ObjectId, StructTag, TypeTag};
 use ptbs::{grpc::IotaClientExt, mirrors};
 
-use super::{AccountBalance, AccountDetails, Accounts, CollateralInfo};
+use super::{AccountBalance, AccountDetails, AccountId, AccountObjectId, Accounts, CollateralInfo};
 
 impl Accounts {
     /// Looks up the `(account, manager)` registry entry for the given sender and
@@ -59,8 +59,8 @@ impl Accounts {
             .context("couldn't get account dynamic field")?;
 
         return Ok(AccountDetails {
-            account_id: cap.account_id.to_string(),
-            account_object_id: account_object_id.to_string(),
+            account_id: AccountId::from_be_bytes(cap.account_id.into_bytes()),
+            account_object_id: AccountObjectId::from_be_bytes(account_object_id.into_bytes()),
             manager_cap_id: manager_wrapper_id.to_string(),
         });
     }
@@ -96,8 +96,8 @@ impl Accounts {
     ///
     /// # Returns
     ///
-    /// * `Ok(AccountDetails)` - The account's internal ID, on-chain object ID,
-    ///   and manager capability ID
+    /// * `Ok(AccountDetails)` - The account's id (for sequencer commands), its
+    ///   object id (for DEX calls) and its manager capability id
     /// * `Err` - Account not found or failed to fetch details
     ///
     /// # Examples
@@ -116,8 +116,8 @@ impl Accounts {
     /// let accounts = Accounts::new(client, config, signer).await?;
     ///
     /// let details = accounts.get_existing(0).await?;
-    /// println!("Account ID: {}", details.account_id);
-    /// println!("Account Object ID: {}", details.account_object_id);
+    /// println!("Account ID (orders): {}", details.account_id);
+    /// println!("Account Object ID (deposits): {}", details.account_object_id);
     /// println!("Manager Capability ID: {}", details.manager_cap_id);
     /// # Ok(())
     /// # }
@@ -188,14 +188,17 @@ impl Accounts {
     }
 
     /// Reads an account's cross-margin collateral balance on the exchange from
-    /// the live account object's `cross_collateral` field.
+    /// the `cross_collateral` field of the live account object
+    /// `account_object_id`.
     ///
     /// The returned `value` is in the collateral coin's smallest units; pair it
     /// with [`Accounts::collateral_info`]'s `decimals` to display a
     /// human-readable amount.
-    pub async fn account_balance(&self, account_object_id: &str) -> anyhow::Result<AccountBalance> {
-        let obj_id =
-            ObjectId::from_str(account_object_id).context("couldn't parse account object id")?;
+    pub async fn account_balance(
+        &self,
+        account_object_id: &AccountObjectId,
+    ) -> anyhow::Result<AccountBalance> {
+        let obj_id = ObjectId::new(account_object_id.to_be_bytes());
         let (_, account) = self
             .client
             .move_object::<mirrors::Account>(obj_id)
@@ -210,13 +213,13 @@ impl Accounts {
 
     /// Returns the on-chain market object IDs for all Pdf<T> dynamic fields on the account.
     ///
-    /// Queries the account's inner UID for dynamic fields whose type contains `Pdf`,
-    /// then resolves each market's static ID to its current object ID via the Exchange.
+    /// Queries the UID of the account's static id for dynamic fields whose type contains
+    /// `Pdf`, then resolves each market's static ID to its current object ID via the Exchange.
     pub(super) async fn get_market_object_ids_for_pdfs(
         &self,
-        account_static_id: &str,
+        account_id: &AccountId,
     ) -> anyhow::Result<Vec<ObjectId>> {
-        let account_uid = ObjectId::from_str(account_static_id)?;
+        let account_uid = ObjectId::new(account_id.to_be_bytes());
         let fields = self.client.get_dynamic_fields(account_uid).await?;
 
         let mut market_object_ids = Vec::new();

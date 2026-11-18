@@ -85,7 +85,8 @@ use crate::core::{AccountId, MarketId};
 /// # Variants
 ///
 /// * `SubmitOrder` - Submit a new order to the order book
-/// * `CancelOrder` - Cancel an existing order or all orders for an account
+/// * `CancelOrder` - Cancel an existing order or all orders for an account, in one
+///   market or in every market
 /// * `LiquidatePosition` - Liquidate an account's position in a market
 /// * `SwitchToCross` - Switch a position's margin mode to cross
 /// * `SwitchToIsolated` - Switch a position's margin mode to isolated
@@ -158,11 +159,12 @@ impl From<SetImrRequest> for Command {
 }
 
 impl Command {
-    /// Extracts the market identifier from the command, if available.
+    /// Extracts the market identifier from the command, if available. A cancel
+    /// that names no market, which reaches every market, gives none.
     pub fn get_markets(&self) -> Vec<MarketId> {
         match &self {
             Command::SubmitOrder(r) => return vec![r.market_id],
-            Command::CancelOrder(r) => return vec![r.market_id],
+            Command::CancelOrder(r) => return r.market_id.into_iter().collect(),
             Command::LiquidatePosition(_) => return vec![],
             Command::SwitchToCross(r) => return vec![r.market_id],
             Command::SwitchToIsolated(r) => return vec![r.market_id],
@@ -249,8 +251,11 @@ impl Command {
 ///
 /// # Validation
 ///
-/// The payload validates all commands and ensures that the sender has permission
-/// to execute commands on the specified accounts.
+/// The payload validates all commands and ensures that the owner has permission
+/// to execute commands on the specified accounts: each command's `account` must be
+/// the [`AccountId`] of an account registered to `owner`, or that command is refused
+/// with `SenderNotAllowed` (501). An account object id in its place names no account
+/// and is refused the same way.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransactionPayload {
     // v1 wire format used `sender`; v2 renames to `owner`. owner is the

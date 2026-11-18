@@ -22,5 +22,8 @@ tokio = { workspace = true }
 tokio-tungstenite = { workspace = true }
 urlencoding = { workspace = true }
 
+[dev-dependencies]
+rust_decimal_macros = { workspace = true }
+
 [lints]
 workspace = true

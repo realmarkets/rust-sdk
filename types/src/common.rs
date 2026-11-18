@@ -177,6 +177,10 @@ pub enum TradeType {
     LiquidationWithInsurance,
     LiquidationWithAdl,
     Settlement,
+    /// A fill of an [`OrderType::Liquidation`] order against the book: part of a
+    /// distressed account's position closed with ordinary makers at their own
+    /// prices, rather than handed to the designated liquidator
+    LiquidationOnBook,
 }
 
 /// Status of a liquidation outcome indicating what actions were taken.
@@ -588,8 +592,8 @@ pub enum OrderError {
     /// order is named twice.
     OcoLinkedOrderAlreadyLinked,
 
-    /// OCO conditional rejected: the order its OCO link names is on the other
-    /// side. both orders of a pair buy, or both sell.
+    /// Reserved: an OCO pair may be on either side, and nothing emits this
+    /// today. It stays as wire value 31.
     OcoSideMismatch,
 
     /// OCO conditional rejected: the order its OCO link names has the same
@@ -701,6 +705,28 @@ pub enum OrderError {
     /// # Resolution
     /// - cancel a conditional the account no longer needs on that market
     TooManyConditionals,
+
+    /// order rejected: the account's cross-margin group is being liquidated.
+    ///
+    /// a partial liquidation closes the group's positions on the book a round at
+    /// a time, holding the account off between rounds; until a round brings the
+    /// group back above its maintenance margin, or it is taken over, the account
+    /// places no orders on any market. cancelling orders still works.
+    ///
+    /// # Resolution
+    /// - wait for the liquidation to release the account, or deposit collateral
+    ///   to bring the group back above maintenance
+    AccountInLiquidation,
+
+    /// on a cancelled conditional order: a fill closed the position it was
+    /// placed against, taking it to flat or past flat to the other side.
+    ///
+    /// the account's conditionals on that market go when they are on the side
+    /// that closed the position (sells for a long, buys for a short) and are
+    /// reduce-only or sized as a percentage of the position. one still dormant
+    /// behind a parent order that has not traded stays. the other order of a
+    /// one-cancels-other pair goes with it, with this error too.
+    CancelledByPositionClose,
 }
 
 /// Reasons why a sequenced margin-parameter command (`switch_to_cross`,
@@ -739,6 +765,10 @@ pub enum MarginParameterError {
     /// least the market's first. not to be confused with `ImrBelowMarketMinimum`, a
     /// `set_imr` value below the market's.
     PositionImrBelowMarket,
+    /// the account's cross-margin group is being liquidated, held off between
+    /// partial rounds: its margin parameters stay as they are until the
+    /// liquidation releases it.
+    AccountInLiquidation,
 }
 
 /// Outcome of applying a v2 multisig envelope. Carries either the accepted
@@ -1503,6 +1533,9 @@ impl TimeInForce {
 /// - Cannot use `post_only` flag (always takes liquidity)
 /// - Must use IOC or FOK time-in-force; a GTC or GTT market order is rejected
 ///
+/// ## Liquidation Orders
+/// - Placed by the engine only; a submitted one is rejected
+///
 /// # Risk Considerations
 ///
 /// ## Limit Order Risks
@@ -1518,8 +1551,9 @@ impl TimeInForce {
 /// # JSON Representation
 ///
 /// ```json
-/// "Limit"   // Limit order execution
-/// "Market"  // Market order execution
+/// "Limit"        // Limit order execution
+/// "Market"       // Market order execution
+/// "Liquidation"  // Limit order the engine placed during a liquidation
 /// ```
 #[derive(Copy, Default, PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum OrderType {
@@ -1613,6 +1647,17 @@ pub enum OrderType {
     /// - Never valid for order submission
     /// - Should be replaced with Limit or Market before submission
     Unspecified,
+
+    /// Liquidation order - a limit order the engine places to close part of a
+    /// distressed account's position during a liquidation.
+    ///
+    /// It carries a limit price and matches exactly like [`OrderType::Limit`];
+    /// the type says why it was placed. It is always immediate-or-cancel, so it
+    /// never rests on the book.
+    ///
+    /// # Restrictions
+    /// - Only the engine places it: a submitted order of this type is rejected
+    Liquidation,
 }
 
 impl OrderType {
@@ -1788,7 +1833,8 @@ pub enum TriggerCondition {
     /// ## Momentum Entry
     /// - Strategy: Trend following
     /// - Trigger: RisesAbove + NumericTrailingDistance("1000.0")
-    /// - Action: Buy when price breaks above recent resistance
+    /// - Action: Buy once price rises $1,000 above its lowest since the order
+    ///   became active
     ///
     /// # Best Practices
     /// - Set trigger levels above recent highs for breakouts
@@ -2031,8 +2077,8 @@ impl Side {
 ///
 /// - **LastTrade**: the price of the last trade matched in this market
 /// - **Mark**: the market's oracle price, as posted on chain
-/// - **Index**: today an exact copy of **Mark** — the engine writes both slots
-///   from the same oracle update, so the two select the same number
+/// - **Index**: the underlying's spot price, as the market's funding estimator
+///   reads it from its oracle at each on-chain funding update
 ///
 /// # Use Cases
 ///
@@ -2047,9 +2093,15 @@ impl Side {
 /// - Sourced from the on-chain oracle, not from this book
 ///
 /// ## Index
-/// - Currently indistinguishable from **Mark**; choosing it buys no extra
-///   manipulation resistance today. It stays a separate variant so a real index
-///   can be wired behind it without a wire change
+/// - The underlying's spot price; its value comes from neither this book nor the
+///   mark
+/// - Moves only when a funding update for the market lands on chain, not on
+///   every oracle update, and holds still while those updates pause, as they do
+///   while one side of this book has no impact price
+/// - A market listed after index prices were introduced has none until its first
+///   funding update, and a conditional submitted before then is rejected with
+///   `OrderError::ConditionalNoIndexPriceYet`; a market listed before carries its
+///   last mark price until that update
 ///
 /// # Examples
 ///
@@ -2059,7 +2111,7 @@ impl Side {
 /// // Traditional stop-loss using last trade
 /// let last_trade_ref = ReferencePrice::LastTrade;
 ///
-/// // Manipulation-resistant trigger using index
+/// // Trigger on the underlying's spot price, independent of this book
 /// let index_ref = ReferencePrice::Index;
 ///
 /// // Margin-aware trigger using mark price
@@ -2070,7 +2122,7 @@ impl Side {
 ///
 /// ```json
 /// "LastTrade"  // Uses most recent executed trade
-/// "Index"      // Uses calculated index price
+/// "Index"      // Uses the underlying's index price
 /// "Mark"       // Uses mark price for fair value
 /// ```
 #[derive(Debug, Default, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -2090,15 +2142,21 @@ pub enum ReferencePrice {
     #[default]
     LastTrade,
 
-    /// Reserved for a future aggregated index price. Today it is the mark price.
+    /// Uses the index price: the underlying's spot price, as the market's funding
+    /// estimator reads it from its oracle.
     ///
-    /// The engine has a single price writer and it stores the same oracle value
-    /// in both slots, so a conditional watching `Index` watches exactly the
-    /// number a conditional watching `Mark` watches. Choose it only if you want
-    /// to be moved onto a real index automatically once one exists.
+    /// It is recorded when each funding update for the market lands on chain, so
+    /// it moves at that cadence rather than on every oracle update, and it holds
+    /// still while those updates pause, as they do while one side of this book has
+    /// no impact price. Its value comes from neither this book nor the mark. A
+    /// market listed after index prices were introduced has none until its first
+    /// funding update, and a conditional on it is rejected with
+    /// `OrderError::ConditionalNoIndexPriceYet` until then; a market listed before
+    /// carries its last mark price until that update.
     ///
     /// # Best For
-    /// - Nothing `Mark` does not already do, until a distinct index exists
+    /// - Stops and take-profits that should follow the underlying's spot market
+    ///   rather than this market's mark or its trades
     Index,
 
     /// Uses the mark price: the market's oracle price, as posted on chain.

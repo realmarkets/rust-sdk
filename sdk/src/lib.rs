@@ -18,8 +18,9 @@
 //!     // Create a testnet client (automatically handles signing and nonces)
 //!     let client = SigningClient::new_testnet(signer)?;
 //!
-//!     // `market` and `account` are on-chain object ids — `0x`-prefixed hex,
-//!     // never ticker symbols; anything else fails in `build()`
+//!     // `market` is the market's on-chain object id and `account` the account's
+//!     // id (`AccountDetails::account_id`), not its account object id; both are
+//!     // `0x`-prefixed hex, never ticker symbols, and anything else fails in `build()`
 //!     let order = SubmitOrderRequest::builder()
 //!         .market("0x5efc5ad00c209baf4c5d77dfd1be18e8b50916e53adbe2142ae1b47af445303c")
 //!         .account("0xcc6ebf909253ea35314bb28d91321f6415827c01790fba84aaf570c87372850a")
@@ -39,6 +40,14 @@
 //! }
 //! ```
 //!
+//! ## Which account id
+//!
+//! An account has two ids of the same `0x` and 64 hex digits shape. Every command
+//! here takes its **account id**, the static id `dex`'s `AccountDetails::account_id`
+//! and the indexer's `Account::id` carry. Its **account object id** is what `dex`'s
+//! deposits and withdrawals take; in a command it names no account of the signer,
+//! and the sequencer refuses it with `SenderNotAllowed` (501).
+//!
 //! ## Architecture
 //!
 //! The SDK uses a transaction-based approach where:
@@ -50,7 +59,7 @@
 //!
 //! - **Submit Orders**: Create market or limit orders with various time-in-force options
 //! - **Cancel Orders**: Cancel one order by id or client id, or every order an
-//!   account holds in one market
+//!   account holds in one market or in every market
 //! - **Liquidate Positions**: Trigger liquidation of a distressed account
 //! - **Margin Parameters**: Switch a position to cross or isolated margin, or set
 //!   its IMR — each must be alone in its transaction

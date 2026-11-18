@@ -5,9 +5,10 @@ use ptbs::{
 };
 
 use super::{
-    ACCOUNT_OBJECT, ACCOUNT_STATIC, GAS_COIN, MANAGER_CAP, OnlySubmission, Received, SOUL_BOUND,
+    ACCOUNT_OBJECT_ID, ACCOUNT_STATIC, GAS_COIN, MANAGER_CAP, OnlySubmission, Received, SOUL_BOUND,
     account, account_type, accounts, deployed, sender, shared, soul_bound_type,
 };
+use crate::account::AccountId;
 
 /// What `account::new` and `registry::new` create: the account and its
 /// soul-bound manager cap.
@@ -48,8 +49,11 @@ async fn create_returns_the_account_the_transaction_created() {
     let submission = node.only_submission();
     submission.assert_well_formed();
     assert_eq!(digest, submission.transaction.digest().to_string());
-    assert_eq!(details.account_id, ACCOUNT_STATIC.to_string());
-    assert_eq!(details.account_object_id, ACCOUNT_OBJECT.to_string());
+    assert_eq!(
+        details.account_id,
+        AccountId::from_be_bytes(ACCOUNT_STATIC.into_bytes())
+    );
+    assert_eq!(details.account_object_id, ACCOUNT_OBJECT_ID);
     assert_eq!(details.manager_cap_id, SOUL_BOUND.to_string());
     assert_eq!(
         submission.commands(),
